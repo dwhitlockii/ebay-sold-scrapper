@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>eBay Sold Items Scraper</title>
+  <title>Product Price Scraper</title>
   <!-- Bootstrap CSS -->
   <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
   <!-- Custom CSS -->
@@ -13,24 +13,48 @@
 </head>
 <body>
   <div class="container">
-    <h1 class="text-center mt-4">eBay Sold Items Scraper</h1>
+    <h1 class="text-center mt-4">Product Price Scraper</h1>
     <div class="row justify-content-center">
       <div class="col-md-8">
+        <!-- Search form: input field and two buttons -->
         <form id="searchForm" class="mt-4">
           <div class="form-group">
-            <label for="itemQuery">Search for an item:</label>
-            <input type="text" class="form-control" id="itemQuery" placeholder="Enter item name" required>
+            <label for="itemQuery">Enter product name:</label>
+            <input type="text" class="form-control" id="itemQuery" placeholder="e.g. rt-ac5300" required>
           </div>
-          <button type="submit" class="btn btn-primary btn-block">Search</button>
         </form>
-        <div id="results" class="mt-4" style="display:none;">
-          <h3>Aggregate Data</h3>
+        <button id="ebaySearchBtn" class="btn btn-primary btn-block">Search eBay Sold Items</button>
+        <button id="amazonSearchBtn" class="btn btn-success btn-block mt-3">Search Amazon New &amp; Used</button>
+
+        <!-- eBay Results Section -->
+        <div id="ebayResults" class="mt-4" style="display:none;">
+          <h3>eBay Aggregate Data</h3>
           <p>Average Sold Price: <span id="avgPrice"></span></p>
           <p>Highest Sold Price: <span id="highPrice"></span></p>
           <p>Lowest Sold Price: <span id="lowPrice"></span></p>
           <p>Total Sales: <span id="totalSales"></span></p>
-          <!-- Chart Canvas -->
           <canvas id="salesChart" width="400" height="200"></canvas>
+        </div>
+
+        <!-- Amazon Results Section -->
+        <div id="amazonResults" class="mt-4" style="display:none;">
+          <h3>Amazon Aggregate Data</h3>
+          <div class="border p-3 mb-3">
+            <h5>New Items</h5>
+            <p>Average New Price: <span id="avgNewPrice"></span></p>
+            <p>Highest New Price: <span id="highNewPrice"></span></p>
+            <p>Lowest New Price: <span id="lowNewPrice"></span></p>
+            <p>Total New Items: <span id="totalNew"></span></p>
+          </div>
+          <div class="border p-3 mb-3">
+            <h5>Used Items</h5>
+            <p>Average Used Price: <span id="avgUsedPrice"></span></p>
+            <p>Highest Used Price: <span id="highUsedPrice"></span></p>
+            <p>Lowest Used Price: <span id="lowUsedPrice"></span></p>
+            <p>Total Used Items: <span id="totalUsed"></span></p>
+          </div>
+          <!-- A simple bar chart comparing the average new and used prices -->
+          <canvas id="amazonChart" width="400" height="200"></canvas>
         </div>
       </div>
     </div>
@@ -44,3 +68,4 @@
   <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 </body>
 </html>
+

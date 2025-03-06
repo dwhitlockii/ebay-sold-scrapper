@@ -1,8 +1,8 @@
 {
-  "name": "ebay-sold-scraper",
+  "name": "ebay-amazon-scraper",
   "version": "1.0.0",
-  "description": "A tool that scrapes eBay sold items using web scraping (demonstration purposes only)",
-  "main": "index.js",
+  "description": "A tool that scrapes eBay sold items and Amazon new/used data (demo purposes only)",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
