@@ -45,6 +45,13 @@ function initDatabase() {
       timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (search_id) REFERENCES searches(id)
     );
+    
+    CREATE TABLE IF NOT EXISTS wishlist (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_name TEXT NOT NULL,
+      target_price REAL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
   
   console.log('Database initialized');
@@ -138,9 +145,29 @@ function getPriceHistory(query) {
   return historyQuery.all(query);
 }
 
+// Wishlist functions
+function addToWishlist(productName, targetPrice) {
+  const stmt = db.prepare('INSERT INTO wishlist (product_name, target_price) VALUES (?, ?)');
+  const result = stmt.run(productName, targetPrice);
+  return result.lastInsertRowid;
+}
+
+function getWishlist() {
+  const stmt = db.prepare('SELECT * FROM wishlist ORDER BY created_at DESC');
+  return stmt.all();
+}
+
+function removeFromWishlist(id) {
+  const stmt = db.prepare('DELETE FROM wishlist WHERE id = ?');
+  return stmt.run(id);
+}
+
 module.exports = {
   initDatabase,
   saveEbayResults,
   saveAmazonResults,
-  getPriceHistory
+  getPriceHistory,
+  addToWishlist,
+  getWishlist,
+  removeFromWishlist
 };
