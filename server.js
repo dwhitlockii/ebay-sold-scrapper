@@ -237,61 +237,6 @@ app.get('/api/price-history', async (req, res) => {
   }
 });
 
-// Wishlist API Endpoints
-app.use(express.json()); // Add middleware to parse JSON request bodies
-
-// Get all wishlist items
-app.get('/api/wishlist', (req, res) => {
-  try {
-    const wishlist = db.getWishlist();
-    res.json({ wishlist });
-  } catch (error) {
-    console.error('Error fetching wishlist:', error.message);
-    res.status(500).json({ error: "An error occurred while fetching wishlist." });
-  }
-});
-
-// Add item to wishlist
-app.post('/api/wishlist', (req, res) => {
-  try {
-    const { productName, targetPrice } = req.body;
-    
-    if (!productName) {
-      return res.status(400).json({ error: "Product name is required." });
-    }
-    
-    const id = db.addToWishlist(productName, targetPrice || null);
-    res.status(201).json({ 
-      success: true, 
-      id, 
-      message: "Item added to wishlist successfully." 
-    });
-  } catch (error) {
-    console.error('Error adding to wishlist:', error.message);
-    res.status(500).json({ error: "An error occurred while adding to wishlist." });
-  }
-});
-
-// Remove item from wishlist
-app.delete('/api/wishlist/:id', (req, res) => {
-  try {
-    const id = req.params.id;
-    const result = db.removeFromWishlist(id);
-    
-    if (result.changes === 0) {
-      return res.status(404).json({ error: "Item not found in wishlist." });
-    }
-    
-    res.json({ 
-      success: true, 
-      message: "Item removed from wishlist successfully." 
-    });
-  } catch (error) {
-    console.error('Error removing from wishlist:', error.message);
-    res.status(500).json({ error: "An error occurred while removing from wishlist." });
-  }
-});
-
 // Start the Express server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
