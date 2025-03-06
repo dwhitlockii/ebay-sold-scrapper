@@ -53,9 +53,13 @@ app.get('/api/search', async (req, res) => {
         soldDate = new Date(today.getTime() - pastTime);
       }
 
+      // NEW: Extract the sold item title and link.
+      let title = $(el).find('.s-item__title').first().text().trim();
+      let link = $(el).find('.s-item__link').attr('href');
+
       // Only add the item if a valid soldPrice was parsed.
       if (!isNaN(soldPrice)) {
-        items.push({ soldPrice, soldDate });
+        items.push({ title, link, soldPrice, soldDate });
       }
     });
 
@@ -99,6 +103,23 @@ app.get('/api/search', async (req, res) => {
   } catch (error) {
     console.error('Error during scraping:', error.message);
     res.status(500).json({ error: "An error occurred while scraping eBay data." });
+  }
+});
+
+// Amazon API endpoint
+app.get('/api/search/amazon', async (req, res) => {
+  const query = req.query.q;
+  if (!query) {
+    return res.status(400).json({ error: "Query parameter 'q' is required." });
+  }
+  
+  try {
+    // This is a placeholder. Actual Amazon scraping would go here
+    // Warning: Amazon strictly prohibits scraping and may block your IP
+    res.status(501).json({ error: "Amazon API endpoint not fully implemented yet." });
+  } catch (error) {
+    console.error('Error during Amazon scraping:', error.message);
+    res.status(500).json({ error: "An error occurred while scraping Amazon data." });
   }
 });
 
