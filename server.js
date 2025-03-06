@@ -1,3 +1,4 @@
+
 const express = require('express');
 const path = require('path');
 const axios = require('axios');
@@ -81,4 +82,42 @@ app.get('/api/search', async (req, res) => {
     const totalSales = items.length;
     const sumPrices = items.reduce((sum, item) => sum + item.soldPrice, 0);
     const avgPrice = parseFloat((sumPrices / totalSales).toFixed(2));
-    const highPrice = Math.max(...items
+    const highPrice = Math.max(...items.map(item => item.soldPrice));
+    const lowPrice = Math.min(...items.map(item => item.soldPrice));
+
+    // Group sales over time (by date in YYYY-MM-DD format)
+    const salesOverTimeObj = {};
+    items.forEach(item => {
+      // Use the sold date (rounded to the day)
+      const date = new Date(item.soldDate).toISOString().slice(0, 10);
+      salesOverTimeObj[date] = (salesOverTimeObj[date] || 0) + 1;
+    });
+
+    // Sort dates for the chart
+    const datesSorted = Object.keys(salesOverTimeObj).sort();
+    const salesCounts = datesSorted.map(date => salesOverTimeObj[date]);
+
+    res.json({
+      items,
+      aggregates: {
+        avgPrice,
+        highPrice,
+        lowPrice,
+        totalSales,
+        salesOverTime: {
+          dates: datesSorted,
+          counts: salesCounts
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error during scraping:', error.message);
+    res.status(500).json({ error: "An error occurred while scraping eBay data." });
+  }
+});
+
+// Start the Express server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});

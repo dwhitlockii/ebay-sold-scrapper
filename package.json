@@ -2,7 +2,7 @@
   "name": "ebay-sold-scraper",
   "version": "1.0.0",
   "description": "A tool that scrapes eBay sold items using web scraping (demonstration purposes only)",
-  "main": "server.js",
+  "main": "index.js",
   "scripts": {
     "start": "node server.js"
   },
