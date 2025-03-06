@@ -15,6 +15,126 @@ function toggleSpinner(show) {
 function hideResults() {
   document.getElementById('ebayResults').classList.add('d-none');
   document.getElementById('amazonResults').classList.add('d-none');
+  document.getElementById('priceHistoryCard').classList.add('d-none');
+}
+
+// Load price history for a query
+function loadPriceHistory(query) {
+  fetch(`/api/price-history?q=${encodeURIComponent(query)}`)
+    .then(response => response.json())
+    .then(data => {
+      if (data.error || !data.history || data.history.length === 0) {
+        console.log('No price history available yet');
+        return;
+      }
+
+      displayPriceHistory(data.history);
+    })
+    .catch(error => {
+      console.error('Error fetching price history:', error);
+    });
+}
+
+// Display price history data
+function displayPriceHistory(historyData) {
+  const priceHistoryCard = document.getElementById('priceHistoryCard');
+  priceHistoryCard.classList.remove('d-none');
+
+  // Prepare data for chart
+  const labels = historyData.map(item => {
+    const date = new Date(item.search_date);
+    return date.toLocaleDateString();
+  });
+
+  const ebayData = historyData.map(item => item.ebay_avg_price || null);
+  const amazonNewData = historyData.map(item => item.amazon_avg_new_price || null);
+  const amazonUsedData = historyData.map(item => item.amazon_avg_used_price || null);
+
+  // Reverse arrays to show oldest to newest
+  labels.reverse();
+  ebayData.reverse();
+  amazonNewData.reverse();
+  amazonUsedData.reverse();
+
+  // Create history chart
+  const ctx = document.getElementById('historyChart').getContext('2d');
+
+  if (window.historyChartInstance) {
+    window.historyChartInstance.destroy();
+  }
+
+  window.historyChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'eBay Avg Price',
+          data: ebayData,
+          borderColor: 'rgba(54, 162, 235, 1)',
+          backgroundColor: 'rgba(54, 162, 235, 0.2)',
+          tension: 0.1,
+          fill: false
+        },
+        {
+          label: 'Amazon New Avg',
+          data: amazonNewData,
+          borderColor: 'rgba(40, 167, 69, 1)',
+          backgroundColor: 'rgba(40, 167, 69, 0.2)',
+          tension: 0.1,
+          fill: false
+        },
+        {
+          label: 'Amazon Used Avg',
+          data: amazonUsedData,
+          borderColor: 'rgba(255, 193, 7, 1)',
+          backgroundColor: 'rgba(255, 193, 7, 0.2)',
+          tension: 0.1,
+          fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: {
+          beginAtZero: false,
+          ticks: {
+            callback: function(value) {
+              return '$' + value;
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // Populate history table
+  const tableBody = document.getElementById('historyTableBody');
+  tableBody.innerHTML = '';
+
+  historyData.forEach(item => {
+    const row = document.createElement('tr');
+
+    const dateCell = document.createElement('td');
+    dateCell.textContent = new Date(item.search_date).toLocaleDateString();
+
+    const ebayCell = document.createElement('td');
+    ebayCell.textContent = item.ebay_avg_price ? `$${item.ebay_avg_price}` : 'N/A';
+
+    const amazonNewCell = document.createElement('td');
+    amazonNewCell.textContent = item.amazon_avg_new_price ? `$${item.amazon_avg_new_price}` : 'N/A';
+
+    const amazonUsedCell = document.createElement('td');
+    amazonUsedCell.textContent = item.amazon_avg_used_price ? `$${item.amazon_avg_used_price}` : 'N/A';
+
+    row.appendChild(dateCell);
+    row.appendChild(ebayCell);
+    row.appendChild(amazonNewCell);
+    row.appendChild(amazonUsedCell);
+
+    tableBody.appendChild(row);
+  });
 }
 
 // -------------------------
@@ -33,6 +153,9 @@ document.getElementById('ebaySearchBtn').addEventListener('click', function () {
     .then(data => {
       toggleSpinner(false);
       displayEbayResults(data);
+
+      // Load price history after successful search
+      loadPriceHistory(query);
     })
     .catch(error => {
       toggleSpinner(false);
@@ -111,6 +234,9 @@ document.getElementById('amazonSearchBtn').addEventListener('click', function ()
     .then(data => {
       toggleSpinner(false);
       displayAmazonResults(data);
+
+      // Load price history after successful search
+      loadPriceHistory(query);
     })
     .catch(error => {
       toggleSpinner(false);
@@ -168,3 +294,140 @@ function displayAmazonResults(data) {
     }
   });
 }
+
+// -----------------------------
+// Wishlist functionality
+// -----------------------------
+
+// Load wishlist from server
+function loadWishlist() {
+  fetch('/api/wishlist')
+    .then(response => response.json())
+    .then(data => {
+      const tableBody = document.getElementById('wishlistTable');
+      tableBody.innerHTML = '';
+
+      if (!data.wishlist || data.wishlist.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="4" class="text-center">Your wishlist is empty</td></tr>';
+        return;
+      }
+
+      data.wishlist.forEach(item => {
+        const row = document.createElement('tr');
+
+        // Product name column - make it clickable to search
+        const nameCell = document.createElement('td');
+        const nameLink = document.createElement('a');
+        nameLink.href = '#';
+        nameLink.textContent = item.product_name;
+        nameLink.addEventListener('click', (e) => {
+          e.preventDefault();
+          document.getElementById('itemQuery').value = item.product_name;
+          document.getElementById('ebaySearchBtn').click();
+        });
+        nameCell.appendChild(nameLink);
+
+        // Target price column
+        const priceCell = document.createElement('td');
+        priceCell.textContent = item.target_price ? `$${item.target_price}` : 'Not set';
+
+        // Date added column
+        const dateCell = document.createElement('td');
+        const date = new Date(item.created_at);
+        dateCell.textContent = date.toLocaleDateString();
+
+        // Actions column
+        const actionsCell = document.createElement('td');
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn btn-sm btn-danger';
+        deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+        deleteBtn.addEventListener('click', () => removeFromWishlist(item.id));
+        actionsCell.appendChild(deleteBtn);
+
+        // Add all cells to the row
+        row.appendChild(nameCell);
+        row.appendChild(priceCell);
+        row.appendChild(dateCell);
+        row.appendChild(actionsCell);
+
+        // Add row to table
+        tableBody.appendChild(row);
+      });
+    })
+    .catch(error => {
+      console.error('Error loading wishlist:', error);
+    });
+}
+
+// Add an item to the wishlist
+function addToWishlist(event) {
+  event.preventDefault();
+
+  const productName = document.getElementById('productNameInput').value.trim();
+  const targetPrice = document.getElementById('targetPriceInput').value;
+
+  if (!productName) {
+    alert('Please enter a product name.');
+    return;
+  }
+
+  fetch('/api/wishlist', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      productName,
+      targetPrice: targetPrice ? parseFloat(targetPrice) : null
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      // Clear form
+      document.getElementById('productNameInput').value = '';
+      document.getElementById('targetPriceInput').value = '';
+
+      // Reload wishlist
+      loadWishlist();
+    } else {
+      alert(data.error || 'Failed to add item to wishlist.');
+    }
+  })
+  .catch(error => {
+    console.error('Error adding to wishlist:', error);
+    alert('An error occurred while adding to wishlist.');
+  });
+}
+
+// Remove an item from the wishlist
+function removeFromWishlist(id) {
+  if (!confirm('Are you sure you want to remove this item from your wishlist?')) {
+    return;
+  }
+
+  fetch(`/api/wishlist/${id}`, {
+    method: 'DELETE'
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      loadWishlist();
+    } else {
+      alert(data.error || 'Failed to remove item from wishlist.');
+    }
+  })
+  .catch(error => {
+    console.error('Error removing from wishlist:', error);
+    alert('An error occurred while removing from wishlist.');
+  });
+}
+
+// Add event listeners
+document.addEventListener('DOMContentLoaded', function() {
+  // Load wishlist when page loads
+  loadWishlist();
+
+  // Handle wishlist form submission
+  document.getElementById('wishlistForm').addEventListener('submit', addToWishlist);
+});

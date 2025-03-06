@@ -2,6 +2,10 @@ const express = require('express');
 const path = require('path');
 const axios = require('axios');
 const cheerio = require('cheerio');
+const db = require('./database');
+
+// Initialize the database
+db.initDatabase();
 
 const app = express();
 
@@ -89,6 +93,16 @@ app.get('/api/search', async (req, res) => {
     });
     const datesSorted = Object.keys(salesOverTimeObj).sort();
     const salesCounts = datesSorted.map(date => salesOverTimeObj[date]);
+
+    // Save results to database
+    db.saveEbayResults(query, {
+      aggregates: {
+        avgPrice,
+        highPrice,
+        lowPrice,
+        totalSales
+      }
+    });
 
     res.json({
       items,
@@ -186,6 +200,14 @@ app.get('/api/search/amazon', async (req, res) => {
     const highUsed = totalUsed ? Math.max(...usedItems.map(item => item.usedPrice)) : null;
     const lowUsed = totalUsed ? Math.min(...usedItems.map(item => item.usedPrice)) : null;
 
+    // Save results to database
+    db.saveAmazonResults(query, {
+      aggregates: {
+        new: { totalNew, avgNew, highNew, lowNew },
+        used: { totalUsed, avgUsed, highUsed, lowUsed }
+      }
+    });
+
     res.json({
       items,
       aggregates: {
@@ -196,6 +218,77 @@ app.get('/api/search/amazon', async (req, res) => {
   } catch (error) {
     console.error("Error during Amazon scraping:", error.message);
     res.status(500).json({ error: "An error occurred while scraping Amazon data." });
+  }
+});
+
+// Price History API endpoint
+app.get('/api/price-history', async (req, res) => {
+  const query = req.query.q;
+  if (!query) {
+    return res.status(400).json({ error: "Query parameter 'q' is required." });
+  }
+  
+  try {
+    const historyData = db.getPriceHistory(query);
+    res.json({ history: historyData });
+  } catch (error) {
+    console.error('Error fetching price history:', error.message);
+    res.status(500).json({ error: "An error occurred while fetching price history." });
+  }
+});
+
+// Wishlist API Endpoints
+app.use(express.json()); // Add middleware to parse JSON request bodies
+
+// Get all wishlist items
+app.get('/api/wishlist', (req, res) => {
+  try {
+    const wishlist = db.getWishlist();
+    res.json({ wishlist });
+  } catch (error) {
+    console.error('Error fetching wishlist:', error.message);
+    res.status(500).json({ error: "An error occurred while fetching wishlist." });
+  }
+});
+
+// Add item to wishlist
+app.post('/api/wishlist', (req, res) => {
+  try {
+    const { productName, targetPrice } = req.body;
+    
+    if (!productName) {
+      return res.status(400).json({ error: "Product name is required." });
+    }
+    
+    const id = db.addToWishlist(productName, targetPrice || null);
+    res.status(201).json({ 
+      success: true, 
+      id, 
+      message: "Item added to wishlist successfully." 
+    });
+  } catch (error) {
+    console.error('Error adding to wishlist:', error.message);
+    res.status(500).json({ error: "An error occurred while adding to wishlist." });
+  }
+});
+
+// Remove item from wishlist
+app.delete('/api/wishlist/:id', (req, res) => {
+  try {
+    const id = req.params.id;
+    const result = db.removeFromWishlist(id);
+    
+    if (result.changes === 0) {
+      return res.status(404).json({ error: "Item not found in wishlist." });
+    }
+    
+    res.json({ 
+      success: true, 
+      message: "Item removed from wishlist successfully." 
+    });
+  } catch (error) {
+    console.error('Error removing from wishlist:', error.message);
+    res.status(500).json({ error: "An error occurred while removing from wishlist." });
   }
 });
 
