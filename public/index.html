@@ -110,6 +110,31 @@
     <!-- Results Section -->
     <section class="results-section my-5">
       <div class="container">
+        <!-- Price History Card -->
+        <div id="priceHistoryCard" class="card mb-4 d-none">
+          <div class="card-header bg-info text-white">
+            Price History Tracking
+          </div>
+          <div class="card-body">
+            <h5>Historical Price Data</h5>
+            <p class="mb-3">Track how prices have changed over time</p>
+            <canvas id="historyChart" width="400" height="200"></canvas>
+            <div class="table-responsive mt-4">
+              <table class="table table-striped">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>eBay Avg</th>
+                    <th>Amazon New Avg</th>
+                    <th>Amazon Used Avg</th>
+                  </tr>
+                </thead>
+                <tbody id="historyTableBody">
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
         <!-- eBay Results Card -->
         <div id="ebayResults" class="card mb-4 d-none">
           <div class="card-header bg-primary text-white">

@@ -120,6 +120,31 @@ canvas {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
+/* Price History styles */
+#priceHistoryCard {
+  transition: all 0.3s ease;
+}
+
+#priceHistoryCard .card-header {
+  background-color: #17a2b8 !important;
+}
+
+.table-responsive {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.table {
+  font-size: 0.9rem;
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  background-color: #f8f9fa;
+  z-index: 10;
+}
+
 /* Loading Spinner */
 #loadingSpinner {
   position: fixed;

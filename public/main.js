@@ -15,6 +15,126 @@ function toggleSpinner(show) {
 function hideResults() {
   document.getElementById('ebayResults').classList.add('d-none');
   document.getElementById('amazonResults').classList.add('d-none');
+  document.getElementById('priceHistoryCard').classList.add('d-none');
+}
+
+// Load price history for a query
+function loadPriceHistory(query) {
+  fetch(`/api/price-history?q=${encodeURIComponent(query)}`)
+    .then(response => response.json())
+    .then(data => {
+      if (data.error || !data.history || data.history.length === 0) {
+        console.log('No price history available yet');
+        return;
+      }
+      
+      displayPriceHistory(data.history);
+    })
+    .catch(error => {
+      console.error('Error fetching price history:', error);
+    });
+}
+
+// Display price history data
+function displayPriceHistory(historyData) {
+  const priceHistoryCard = document.getElementById('priceHistoryCard');
+  priceHistoryCard.classList.remove('d-none');
+  
+  // Prepare data for chart
+  const labels = historyData.map(item => {
+    const date = new Date(item.search_date);
+    return date.toLocaleDateString();
+  });
+  
+  const ebayData = historyData.map(item => item.ebay_avg_price || null);
+  const amazonNewData = historyData.map(item => item.amazon_avg_new_price || null);
+  const amazonUsedData = historyData.map(item => item.amazon_avg_used_price || null);
+  
+  // Reverse arrays to show oldest to newest
+  labels.reverse();
+  ebayData.reverse();
+  amazonNewData.reverse();
+  amazonUsedData.reverse();
+  
+  // Create history chart
+  const ctx = document.getElementById('historyChart').getContext('2d');
+  
+  if (window.historyChartInstance) {
+    window.historyChartInstance.destroy();
+  }
+  
+  window.historyChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'eBay Avg Price',
+          data: ebayData,
+          borderColor: 'rgba(54, 162, 235, 1)',
+          backgroundColor: 'rgba(54, 162, 235, 0.2)',
+          tension: 0.1,
+          fill: false
+        },
+        {
+          label: 'Amazon New Avg',
+          data: amazonNewData,
+          borderColor: 'rgba(40, 167, 69, 1)',
+          backgroundColor: 'rgba(40, 167, 69, 0.2)',
+          tension: 0.1,
+          fill: false
+        },
+        {
+          label: 'Amazon Used Avg',
+          data: amazonUsedData,
+          borderColor: 'rgba(255, 193, 7, 1)',
+          backgroundColor: 'rgba(255, 193, 7, 0.2)',
+          tension: 0.1,
+          fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: {
+          beginAtZero: false,
+          ticks: {
+            callback: function(value) {
+              return '$' + value;
+            }
+          }
+        }
+      }
+    }
+  });
+  
+  // Populate history table
+  const tableBody = document.getElementById('historyTableBody');
+  tableBody.innerHTML = '';
+  
+  historyData.forEach(item => {
+    const row = document.createElement('tr');
+    
+    const dateCell = document.createElement('td');
+    dateCell.textContent = new Date(item.search_date).toLocaleDateString();
+    
+    const ebayCell = document.createElement('td');
+    ebayCell.textContent = item.ebay_avg_price ? `$${item.ebay_avg_price}` : 'N/A';
+    
+    const amazonNewCell = document.createElement('td');
+    amazonNewCell.textContent = item.amazon_avg_new_price ? `$${item.amazon_avg_new_price}` : 'N/A';
+    
+    const amazonUsedCell = document.createElement('td');
+    amazonUsedCell.textContent = item.amazon_avg_used_price ? `$${item.amazon_avg_used_price}` : 'N/A';
+    
+    row.appendChild(dateCell);
+    row.appendChild(ebayCell);
+    row.appendChild(amazonNewCell);
+    row.appendChild(amazonUsedCell);
+    
+    tableBody.appendChild(row);
+  });
 }
 
 // -------------------------
@@ -33,6 +153,9 @@ document.getElementById('ebaySearchBtn').addEventListener('click', function () {
     .then(data => {
       toggleSpinner(false);
       displayEbayResults(data);
+      
+      // Load price history after successful search
+      loadPriceHistory(query);
     })
     .catch(error => {
       toggleSpinner(false);
@@ -111,6 +234,9 @@ document.getElementById('amazonSearchBtn').addEventListener('click', function ()
     .then(data => {
       toggleSpinner(false);
       displayAmazonResults(data);
+      
+      // Load price history after successful search
+      loadPriceHistory(query);
     })
     .catch(error => {
       toggleSpinner(false);
