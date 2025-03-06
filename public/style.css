@@ -1,11 +1,53 @@
+/* Global Styles */
 body {
-  background-color: #f8f9fa;
+  background: #f0f2f5;
+  font-family: 'Roboto', sans-serif;
 }
 
-h1 {
-  margin-top: 20px;
+/* Hero Section */
+.hero-section {
+  background: linear-gradient(135deg, #4a90e2, #9013fe);
+  padding: 80px 0;
 }
 
-#ebayResults, #amazonResults {
-  margin-top: 30px;
+.hero-section h1 {
+  font-size: 3rem;
+}
+
+/* Search Card */
+.card {
+  border: none;
+  border-radius: 15px;
+  margin-bottom: 20px;
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+}
+
+.btn {
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.btn:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+/* Results Cards */
+.results-section .card-header {
+  font-size: 1.25rem;
+  letter-spacing: 0.5px;
+}
+
+/* Loading Spinner */
+#loadingSpinner {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 9999;
+}
+
+/* Footer */
+.footer {
+  background: #222;
+  color: #aaa;
 }
