@@ -198,7 +198,7 @@ app.get('/api/search/amazon', async (req, res) => {
 });
 
 // Start the Express server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3030;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
