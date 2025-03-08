@@ -1,0 +1,75 @@
+<!-- Developer: Dean Whitlock -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register - Price Scraper</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Additional styles to match Spotify login page */
+    body {
+      background-color: #191414;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .register-container {
+      max-width: 400px;
+      width: 100%;
+      padding: 20px;
+      background-color: #1db954;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    .register-container h3 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .form-control {
+      background-color: #fff;
+      color: #000;
+    }
+    .btn-primary {
+      background-color: #1db954;
+      border: none;
+    }
+    .btn-primary:hover {
+      background-color: #1ed760;
+    }
+    .alert {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="register-container">
+    <h1>Register</h1>
+    <form id="registerForm" action="/register" method="POST">
+      <div class="mb-3">
+        <label for="username" class="form-label">Username</label>
+        <input type="text" class="form-control" id="username" name="username" placeholder="Username" required>
+      </div>
+      <div class="mb-3">
+        <label for="email" class="form-label">Email</label>
+        <input type="email" class="form-control" id="email" name="email" placeholder="Email" required>
+      </div>
+      <div class="mb-3">
+        <label for="password" class="form-label">Password</label>
+        <input type="password" class="form-control" id="password" name="password" placeholder="Password" required>
+      </div>
+      <button type="submit" class="btn btn-primary w-100">Register</button>
+    </form>
+    <div id="registerError" class="alert alert-danger mt-3"></div>
+    <div class="text-center mt-4">
+      <p>Already have an account? <a href="/login.html" class="text-white">Login here</a></p>
+    </div>
+  </div>
+  <script src="main.js"></script>
+</body>
+</html>

@@ -1,3 +1,4 @@
+// Developer: Dean Whitlock
 
 const Database = require('better-sqlite3');
 const path = require('path');
@@ -11,163 +12,284 @@ if (!fs.existsSync(dataDir)) {
 
 const db = new Database(path.join(dataDir, 'pricehistory.db'));
 
+const defaultImagePath = path.join(__dirname, 'public', 'default-image.png');
+
 // Initialize database with required tables
 function initDatabase() {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS searches (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      query TEXT NOT NULL,
-      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-    
-    CREATE TABLE IF NOT EXISTS ebay_prices (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      search_id INTEGER NOT NULL,
-      avg_price REAL NOT NULL,
-      high_price REAL NOT NULL,
-      low_price REAL NOT NULL,
-      total_sales INTEGER NOT NULL,
-      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (search_id) REFERENCES searches(id)
-    );
-    
-    CREATE TABLE IF NOT EXISTS amazon_prices (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      search_id INTEGER NOT NULL,
-      avg_new_price REAL,
-      high_new_price REAL,
-      low_new_price REAL,
-      total_new INTEGER,
-      avg_used_price REAL,
-      high_used_price REAL,
-      low_used_price REAL,
-      total_used INTEGER,
-      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (search_id) REFERENCES searches(id)
-    );
-    
-    CREATE TABLE IF NOT EXISTS wishlist (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      product_name TEXT NOT NULL,
-      target_price REAL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
-  
-  console.log('Database initialized');
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE,
+        email TEXT NOT NULL UNIQUE,
+        password TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE TABLE IF NOT EXISTS searches (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        query TEXT NOT NULL,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE TABLE IF NOT EXISTS ebay_prices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        search_id INTEGER NOT NULL,
+        avg_price REAL NOT NULL,
+        high_price REAL NOT NULL,
+        low_price REAL NOT NULL,
+        total_sales INTEGER NOT NULL,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (search_id) REFERENCES searches(id)
+      );
+      CREATE TABLE IF NOT EXISTS amazon_prices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        search_id INTEGER NOT NULL,
+        avg_new_price REAL,
+        high_new_price REAL,
+        low_new_price REAL,
+        total_new INTEGER,
+        avg_used_price REAL,
+        high_used_price REAL,
+        low_used_price REAL,
+        total_used INTEGER,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (search_id) REFERENCES searches(id)
+      );
+      CREATE TABLE IF NOT EXISTS wishlist (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_name TEXT NOT NULL,
+        target_price REAL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE TABLE IF NOT EXISTS price_alerts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        product_name TEXT NOT NULL,
+        target_price REAL NOT NULL,
+        is_active BOOLEAN DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      );
+    `);
+    console.log('Database initialized');
+  } catch (error) {
+    console.error('Error initializing database:', error);
+    throw error;
+  }
+}
+
+// Create a new user
+function createUser(username, email, password) {
+  try {
+    const stmt = db.prepare('INSERT INTO users (username, email, password) VALUES (?, ?, ?)');
+    const result = stmt.run(username, email, password);
+    return result.lastInsertRowid;
+  } catch (error) {
+    console.error('Error creating user:', error);
+    throw error;
+  }
+}
+
+// Get a user by username
+function getUserByUsername(username) {
+  try {
+    const stmt = db.prepare('SELECT * FROM users WHERE username = ?');
+    return stmt.get(username);
+  } catch (error) {
+    console.error('Error getting user by username:', error);
+    throw error;
+  }
 }
 
 // Save eBay search results
 function saveEbayResults(query, data) {
-  const searchInsert = db.prepare('INSERT INTO searches (query) VALUES (?)');
-  const searchResult = searchInsert.run(query);
-  const searchId = searchResult.lastInsertRowid;
-  
-  const ebayInsert = db.prepare(`
-    INSERT INTO ebay_prices (
-      search_id, avg_price, high_price, low_price, total_sales
-    ) VALUES (?, ?, ?, ?, ?)
-  `);
-  
-  ebayInsert.run(
-    searchId,
-    data.aggregates.avgPrice,
-    data.aggregates.highPrice,
-    data.aggregates.lowPrice,
-    data.aggregates.totalSales
-  );
-  
-  return searchId;
+  try {
+    const searchInsert = db.prepare('INSERT INTO searches (query) VALUES (?)');
+    const searchResult = searchInsert.run(query);
+    const searchId = searchResult.lastInsertRowid;
+    
+    const ebayInsert = db.prepare(`
+      INSERT INTO ebay_prices (
+        search_id, avg_price, high_price, low_price, total_sales, timestamp
+      ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `);
+    
+    ebayInsert.run(
+      searchId,
+      data.aggregates.avgPrice,
+      data.aggregates.highPrice,
+      data.aggregates.lowPrice,
+      data.aggregates.totalSales
+    );
+    
+    console.log('eBay results saved successfully');
+    return searchId;
+  } catch (error) {
+    console.error('Error saving eBay results:', error);
+    throw error;
+  }
 }
 
 // Save Amazon search results
 function saveAmazonResults(query, data) {
-  // Check if there's a recent search for this query
-  const searchQuery = db.prepare('SELECT id FROM searches WHERE query = ? ORDER BY timestamp DESC LIMIT 1');
-  const existingSearch = searchQuery.get(query);
-  
-  let searchId;
-  if (existingSearch) {
-    searchId = existingSearch.id;
-  } else {
-    const searchInsert = db.prepare('INSERT INTO searches (query) VALUES (?)');
-    const searchResult = searchInsert.run(query);
-    searchId = searchResult.lastInsertRowid;
+  try {
+    const searchQuery = db.prepare('SELECT id FROM searches WHERE query = ? ORDER BY timestamp DESC LIMIT 1');
+    const existingSearch = searchQuery.get(query);
+    
+    let searchId;
+    if (existingSearch) {
+      searchId = existingSearch.id;
+    } else {
+      const searchInsert = db.prepare('INSERT INTO searches (query) VALUES (?)');
+      const searchResult = searchInsert.run(query);
+      searchId = searchResult.lastInsertRowid;
+    }
+    
+    const amazonInsert = db.prepare(`
+      INSERT INTO amazon_prices (
+        search_id, avg_new_price, high_new_price, low_new_price, total_new,
+        avg_used_price, high_used_price, low_used_price, total_used, timestamp
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `);
+    
+    amazonInsert.run(
+      searchId,
+      data.aggregates.new.avgNew,
+      data.aggregates.new.highNew,
+      data.aggregates.new.lowNew,
+      data.aggregates.new.totalNew,
+      data.aggregates.used.avgUsed,
+      data.aggregates.used.highUsed,
+      data.aggregates.used.lowUsed,
+      data.aggregates.totalUsed
+    );
+    
+    return searchId;
+  } catch (error) {
+    console.error('Error saving Amazon results:', error);
+    throw error;
   }
-  
-  const amazonInsert = db.prepare(`
-    INSERT INTO amazon_prices (
-      search_id, avg_new_price, high_new_price, low_new_price, total_new,
-      avg_used_price, high_used_price, low_used_price, total_used
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  
-  amazonInsert.run(
-    searchId,
-    data.aggregates.new.avgNew,
-    data.aggregates.new.highNew,
-    data.aggregates.new.lowNew,
-    data.aggregates.new.totalNew,
-    data.aggregates.used.avgUsed,
-    data.aggregates.used.highUsed,
-    data.aggregates.used.lowUsed,
-    data.aggregates.used.totalUsed
-  );
-  
-  return searchId;
 }
 
-// Get price history for a query
-function getPriceHistory(query) {
-  const historyQuery = db.prepare(`
-    SELECT 
-      s.query, 
-      s.timestamp as search_date,
-      e.avg_price as ebay_avg_price,
-      e.high_price as ebay_high_price,
-      e.low_price as ebay_low_price,
-      e.total_sales as ebay_total_sales,
-      a.avg_new_price as amazon_avg_new_price,
-      a.avg_used_price as amazon_avg_used_price
-    FROM 
-      searches s
-    LEFT JOIN 
-      ebay_prices e ON s.id = e.search_id
-    LEFT JOIN 
-      amazon_prices a ON s.id = a.search_id
-    WHERE 
-      s.query = ?
-    ORDER BY 
-      s.timestamp DESC
-    LIMIT 30
-  `);
-  
-  return historyQuery.all(query);
+function formatPrice(price) {
+  return price !== null ? `$${price.toFixed(2)}` : 'N/A';
 }
 
 // Wishlist functions
 function addToWishlist(productName, targetPrice) {
-  const stmt = db.prepare('INSERT INTO wishlist (product_name, target_price) VALUES (?, ?)');
-  const result = stmt.run(productName, targetPrice);
-  return result.lastInsertRowid;
+  try {
+    const stmt = db.prepare('INSERT INTO wishlist (product_name, target_price) VALUES (?, ?)');
+    const result = stmt.run(productName, targetPrice);
+    return result.lastInsertRowid;
+  } catch (error) {
+    console.error('Error adding to wishlist:', error);
+    throw error;
+  }
 }
 
 function getWishlist() {
-  const stmt = db.prepare('SELECT * FROM wishlist ORDER BY created_at DESC');
-  return stmt.all();
+  try {
+    const stmt = db.prepare('SELECT * FROM wishlist ORDER BY created_at DESC');
+    return stmt.all();
+  } catch (error) {
+    console.error('Error getting wishlist:', error);
+    throw error;
+  }
 }
 
 function removeFromWishlist(id) {
-  const stmt = db.prepare('DELETE FROM wishlist WHERE id = ?');
-  return stmt.run(id);
+  try {
+    const stmt = db.prepare('DELETE FROM wishlist WHERE id = ?');
+    return stmt.run(id);
+  } catch (error) {
+    console.error('Error removing from wishlist:', error);
+    throw error;
+  }
+}
+
+function createPriceAlert(userId, productName, targetPrice) {
+  try {
+    const stmt = db.prepare(`
+      INSERT INTO price_alerts (user_id, product_name, target_price) VALUES (?, ?, ?)
+    `);
+    const result = stmt.run(userId, productName, targetPrice);
+    return result.lastInsertRowid;
+  } catch (error) {
+    console.error('Error creating price alert:', error);
+    throw error;
+  }
+}
+
+function getEbayHistory(query) {
+  try {
+    console.log('Executing eBay history query for:', query);
+    const stmt = db.prepare(`
+      SELECT ebay_prices.timestamp, 
+             ebay_prices.avg_price, 
+             ebay_prices.high_price, 
+             ebay_prices.low_price, 
+             ebay_prices.total_sales
+      FROM ebay_prices
+      JOIN searches ON ebay_prices.search_id = searches.id
+      WHERE searches.query = ?
+      ORDER BY ebay_prices.timestamp DESC
+    `);
+    
+    console.log('SQL Query:', stmt.source);
+    const results = stmt.all(query);
+    console.log('Query results:', results);
+    return results;
+  } catch (error) {
+    console.error('Error in getEbayHistory:', error.message);
+    console.error('Stack:', error.stack);
+    throw error;
+  }
+}
+
+function getAmazonHistory(query) {
+  try {
+    console.log('Executing Amazon history query for:', query);
+    const stmt = db.prepare(`
+      SELECT amazon_prices.timestamp,
+             amazon_prices.avg_new_price,
+             amazon_prices.high_new_price,
+             amazon_prices.low_new_price,
+             amazon_prices.total_new,
+             amazon_prices.avg_used_price,
+             amazon_prices.high_used_price,
+             amazon_prices.low_used_price,
+             amazon_prices.total_used
+      FROM amazon_prices
+      JOIN searches ON amazon_prices.search_id = searches.id
+      WHERE searches.query = ?
+      ORDER BY amazon_prices.timestamp DESC
+    `);
+    
+    console.log('SQL Query:', stmt.source);
+    const results = stmt.all(query);
+    console.log('Query results:', results);
+    return results;
+  } catch (error) {
+    console.error('Error in getAmazonHistory:', error.message);
+    console.error('Stack:', error.stack);
+    throw error;
+  }
+}
+
+if (require.main === module) {
+  initDatabase();
 }
 
 module.exports = {
+  db, // Export the database instance
   initDatabase,
+  createUser,
+  getUserByUsername,
   saveEbayResults,
   saveAmazonResults,
-  getPriceHistory,
   addToWishlist,
   getWishlist,
-  removeFromWishlist
+  removeFromWishlist,
+  createPriceAlert,
+  getEbayHistory,
+  getAmazonHistory
 };

@@ -1,9 +1,11 @@
+<!-- Developer: Dean Whitlock -->
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Product Price Scraper</title>
+    <title>eBay & Amazon Price History</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -25,6 +27,7 @@
     <link rel="stylesheet" href="style.css" />
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js/dist/chart.umd.js.map"></script>
   </head>
   <body>
     <!-- Navbar -->
@@ -51,6 +54,9 @@
                 >Home</a
               >
             </li>
+            <li class="nav-item">
+              <button id="logoutBtn" class="btn btn-danger">Logout</button>
+            </li>
           </ul>
         </div>
       </div>
@@ -59,8 +65,8 @@
     <!-- Hero Section -->
     <section class="hero-section text-center text-white py-5">
       <div class="container">
-        <h1 class="display-4 fw-bold">Product Price Scraper</h1>
-        <p class="lead">
+        <h1 class="display-4 fw-bold fade-in-up">Product Price Scraper</h1>
+        <p class="lead fade-in-up">
           Compare eBay sold items and Amazon new/used prices with a single click.
         </p>
       </div>
@@ -111,7 +117,7 @@
     <section class="results-section my-5">
       <div class="container">
         <!-- Price History Card -->
-        <div id="priceHistoryCard" class="card mb-4 d-none">
+        <div id="priceHistoryCard" class="card mb-4 d-none fade-in-up">
           <div class="card-header bg-info text-white">
             Price History Tracking
           </div>
@@ -135,12 +141,78 @@
             </div>
           </div>
         </div>
+
+        <!-- Historical Data Section -->
+        <section class="historical-data-section my-5">
+          <div class="container">
+            <div class="row">
+              <div class="col-12">
+                <h3 class="mb-4">Historical Price Data</h3>
+                
+                <!-- eBay History Table -->
+                <div class="card mb-4">
+                  <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">eBay Price History</h4>
+                  </div>
+                  <div class="card-body">
+                    <div class="table-responsive">
+                      <table class="table table-striped table-hover">
+                        <thead>
+                          <tr>
+                            <th>Date</th>
+                            <th>Average Price</th>
+                            <th>Highest Price</th>
+                            <th>Lowest Price</th>
+                            <th>Total Sales</th>
+                          </tr>
+                        </thead>
+                        <tbody id="ebay-history-table"></tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Amazon History Table -->
+                <div class="card">
+                  <div class="card-header bg-success text-white">
+                    <h4 class="mb-0">Amazon Price History</h4>
+                  </div>
+                  <div class="card-body">
+                    <div class="table-responsive">
+                      <table class="table table-striped table-hover">
+                        <thead>
+                          <tr>
+                            <th>Date</th>
+                            <th>Avg New Price</th>
+                            <th>High New Price</th>
+                            <th>Low New Price</th>
+                            <th>Total New</th>
+                            <th>Avg Used Price</th>
+                            <th>High Used Price</th>
+                            <th>Low Used Price</th>
+                            <th>Total Used</th>
+                          </tr>
+                        </thead>
+                        <tbody id="amazon-history-table"></tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- eBay Results Card -->
-        <div id="ebayResults" class="card mb-4 d-none">
+        <div id="ebayResults" class="card mb-4 d-none fade-in-up">
           <div class="card-header bg-primary text-white">
             eBay Sold Items Aggregate Data
           </div>
           <div class="card-body">
+            <!-- New: Item Image -->
+            <div class="text-center mb-4">
+              <img id="ebayItemImage" src="" alt="Item Image" class="img-fluid" style="max-height: 200px;" onerror="this.onerror=null;this.src='default-image.png';">
+            </div>
             <div class="row text-center">
               <div class="col-md-3">
                 <h5>Avg Price</h5>
@@ -169,11 +241,15 @@
         </div>
 
         <!-- Amazon Results Card -->
-        <div id="amazonResults" class="card mb-4 d-none">
+        <div id="amazonResults" class="card mb-4 d-none fade-in-up">
           <div class="card-header bg-success text-white">
             Amazon New &amp; Used Aggregate Data
           </div>
           <div class="card-body">
+            <!-- New: Item Image -->
+            <div class="text-center mb-4">
+              <img id="amazonItemImage" src="" alt="Item Image" class="img-fluid" style="max-height: 200px;" onerror="this.onerror=null;this.src='default-image.png';">
+            </div>
             <div class="row">
               <div class="col-md-6 border-end">
                 <h5>New Items</h5>
@@ -193,13 +269,79 @@
             <canvas id="amazonChart" width="400" height="200" class="mt-4"></canvas>
           </div>
         </div>
+        
+        <!-- Remove the old historical data section -->
+        <div id="historicalDataSection" class="d-none">
+          <!-- Remove this duplicate section -->
+        </div>
+
+        <!-- Keep only this Historical Data Section -->
+        <section class="historical-data-section my-5">
+          <div class="container">
+            <div class="row">
+              <div class="col-12">
+                <h3 class="mb-4">Historical Price Data</h3>
+                
+                <!-- eBay History Table -->
+                <div class="card mb-4">
+                  <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">eBay Price History</h4>
+                  </div>
+                  <div class="card-body">
+                    <div class="table-responsive">
+                      <table class="table table-striped table-hover">
+                        <thead>
+                          <tr>
+                            <th>Date</th>
+                            <th>Average Price</th>
+                            <th>Highest Price</th>
+                            <th>Lowest Price</th>
+                            <th>Total Sales</th>
+                          </tr>
+                        </thead>
+                        <tbody id="ebay-history-table"></tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Amazon History Table -->
+                <div class="card">
+                  <div class="card-header bg-success text-white">
+                    <h4 class="mb-0">Amazon Price History</h4>
+                  </div>
+                  <div class="card-body">
+                    <div class="table-responsive">
+                      <table class="table table-striped table-hover">
+                        <thead>
+                          <tr>
+                            <th>Date</th>
+                            <th>Avg New Price</th>
+                            <th>High New Price</th>
+                            <th>Low New Price</th>
+                            <th>Total New</th>
+                            <th>Avg Used Price</th>
+                            <th>High Used Price</th>
+                            <th>Low Used Price</th>
+                            <th>Total Used</th>
+                          </tr>
+                        </thead>
+                        <tbody id="amazon-history-table"></tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
     </section>
 
     <!-- Wishlist Section -->
     <section class="wishlist-section my-5">
       <div class="container">
-        <div class="card">
+        <div class="card fade-in-up">
           <div class="card-header bg-warning text-dark">
             <h5 class="mb-0"><i class="fas fa-heart"></i> My Wishlist</h5>
           </div>
@@ -242,15 +384,100 @@
       </div>
     </section>
 
+    <!-- User Reviews Section -->
+    <section class="reviews-section my-5">
+      <div class="container">
+        <div class="card fade-in-up">
+          <div class="card-header bg-info text-white">
+            <h5 class="mb-0"><i class="fas fa-star"></i> User Reviews & Ratings</h5>
+          </div>
+          <div class="card-body">
+            <form id="reviewForm" class="mb-4">
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <input type="text" class="form-control" id="reviewerName" placeholder="Your name" required>
+                </div>
+                <div class="col-md-6">
+                  <select class="form-control" id="reviewRating" required>
+                    <option value="">Rating</option>
+                    <option value="1">1 - Poor</option>
+                    <option value="2">2 - Fair</option>
+                    <option value="3">3 - Good</option>
+                    <option value="4">4 - Very Good</option>
+                    <option value="5">5 - Excellent</option>
+                  </select>
+                </div>
+                <div class="col-12">
+                  <textarea class="form-control" id="reviewText" rows="3" placeholder="Your review" required></textarea>
+                </div>
+                <div class="col-12">
+                  <button type="submit" class="btn btn-info w-100">
+                    <i class="fas fa-paper-plane"></i> Submit Review
+                  </button>
+                </div>
+              </div>
+            </form>
+            
+            <div class="table-responsive">
+              <table class="table table-hover">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Rating</th>
+                    <th>Review</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+                <tbody id="reviewsTable">
+                  <tr>
+                    <td colspan="4" class="text-center">No reviews yet</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Add login options -->
+    <section id="loginOptionsSection" class="login-options-section my-5">
+      <div class="container">
+        <div class="row justify-content-center">
+          <div class="col-md-8">
+            <div class="card shadow-sm">
+              <div class="card-body text-center">
+                <h5 class="card-title">Login Options</h5>
+                <p class="card-text">Create an account or connect with:</p>
+                <div class="d-grid gap-2">
+                  <button class="btn btn-primary">
+                    <i class="fas fa-user-plus"></i> Create Account
+                  </button>
+                  <button class="btn btn-danger mt-2">
+                    <i class="fab fa-google"></i> Connect with Google
+                  </button>
+                  <button class="btn btn-dark mt-2">
+                    <i class="fab fa-apple"></i> Connect with Apple
+                  </button>
+                  <button class="btn btn-primary mt-2">
+                    <i class="fab fa-facebook"></i> Connect with Facebook
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- Footer -->
-    <footer class="footer bg-dark text-white text-center py-3">
+    <footer class="footer bg-dark text-white text-center py-3 fade-in-up">
       <div class="container">
         <small>&copy; 2023 Price Scraper. All rights reserved.</small>
       </div>
     </footer>
 
-    <!-- Bootstrap 5 JS Bundle -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Include main.js for client-side logic -->
     <script src="main.js"></script>
   </body>
 </html>

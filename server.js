@@ -1,20 +1,110 @@
+// Developer: Dean Whitlock
+
 const express = require('express');
 const path = require('path');
 const axios = require('axios');
 const cheerio = require('cheerio');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
+const cors = require('cors'); // Add CORS middleware
 const db = require('./database');
+const { saveEbayResults } = require('./database');
 
 // Initialize the database
 db.initDatabase();
 
 const app = express();
+app.use(express.json()); // Add middleware to parse JSON request bodies
+app.use(cors()); // Enable CORS
 
 // Serve static files from the "public" folder
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Secret key for JWT
+const JWT_SECRET = 'your_jwt_secret_key';
+
+// Middleware to protect routes
+function authenticateToken(req, res, next) {
+  const token = req.headers['authorization'];
+  if (!token) return res.sendStatus(401);
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+}
+
+// Rate limiter for login attempts
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 login requests per windowMs
+  message: 'Too many login attempts from this IP, please try again after 15 minutes'
+});
+
+// User registration
+app.post('/api/register', async (req, res) => {
+  const { username, email, password } = req.body;
+  if (!username || !email || !password) {
+    return res.status(400).json({ error: "Username, email, and password are required." });
+  }
+
+  // Password strength validation
+  const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/;
+  if (!passwordRegex.test(password)) {
+    return res.status(400).json({ error: "Password must be at least 8 characters long and contain at least one letter and one number." });
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+  try {
+    const userId = db.createUser(username, email, hashedPassword);
+    res.status(201).json({ success: true, userId });
+  } catch (error) {
+    res.status(500).json({ error: "An error occurred during registration." });
+  }
+});
+
+// User login with rate limiting
+app.post('/api/login', loginLimiter, async (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: "Username and password are required." });
+  }
+
+  const user = db.getUserByUsername(username);
+  if (!user) {
+    return res.status(401).json({ error: "Invalid username or password." });
+  }
+
+  const isPasswordValid = await bcrypt.compare(password, user.password);
+  if (!isPasswordValid) {
+    return res.status(401).json({ error: "Invalid username or password." });
+  }
+
+  const token = jwt.sign({ userId: user.id, username: user.username }, JWT_SECRET, { expiresIn: '1h' });
+  res.json({ token });
+});
+
+// Protected route example
+app.get('/api/protected', authenticateToken, (req, res) => {
+  res.json({ message: "This is a protected route.", user: req.user });
+});
+
+// Serve login page
+app.get('/login.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+// Serve registration page
+app.get('/register.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'register.html'));
+});
+
 // ---------------------------
 // eBay Sold Items Scraping API
 // ---------------------------
+
 app.get('/api/search', async (req, res) => {
   const query = req.query.q;
   if (!query) {
@@ -61,7 +151,7 @@ app.get('/api/search', async (req, res) => {
           soldDate = new Date(today.getTime() - pastTime);
         }
 
-        // NEW: Extract the sold item title and link.
+        // Extract the sold item title and link.
         let title = $(el).find('.s-item__title').first().text().trim();
         let link = $(el).find('.s-item__link').attr('href');
 
@@ -123,9 +213,28 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
+app.post('/search-ebay', async (req, res) => {
+  const { query } = req.body;
+  try {
+    const response = await axios.get(`https://api.ebay.com/...`, {
+      params: { query },
+      headers: { 'Authorization': `Bearer ${process.env.EBAY_API_TOKEN}` }
+    });
+    
+    const data = response.data;
+    const searchId = saveEbayResults(query, data);
+    
+    res.json({ searchId, data });
+  } catch (error) {
+    console.error('Error fetching eBay data:', error);
+    res.status(500).json({ error: 'Failed to fetch eBay data' });
+  }
+});
+
 // ---------------------------
 // Amazon New & Used Scraping API
 // ---------------------------
+
 app.get('/api/search/amazon', async (req, res) => {
   const query = req.query.q;
   if (!query) {
@@ -221,24 +330,7 @@ app.get('/api/search/amazon', async (req, res) => {
   }
 });
 
-// Price History API endpoint
-app.get('/api/price-history', async (req, res) => {
-  const query = req.query.q;
-  if (!query) {
-    return res.status(400).json({ error: "Query parameter 'q' is required." });
-  }
-  
-  try {
-    const historyData = db.getPriceHistory(query);
-    res.json({ history: historyData });
-  } catch (error) {
-    console.error('Error fetching price history:', error.message);
-    res.status(500).json({ error: "An error occurred while fetching price history." });
-  }
-});
-
 // Wishlist API Endpoints
-app.use(express.json()); // Add middleware to parse JSON request bodies
 
 // Get all wishlist items
 app.get('/api/wishlist', (req, res) => {
@@ -292,8 +384,52 @@ app.delete('/api/wishlist/:id', (req, res) => {
   }
 });
 
+// Price History Trends & Analytics
+app.get('/api/analytics/:productId', async (req, res) => {
+  try {
+    const stats = {
+      priceVolatility: calculateVolatility(prices),
+      seasonalTrends: analyzeSeasonalPatterns(prices),
+      bestTimeToSell: findOptimalSellingPeriods(prices),
+      priceProjection: predictFuturePrices(prices)
+    };
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: "Analytics calculation failed" });
+  }
+});
+
+app.get('/api/historical-data', async (req, res) => {
+  const query = req.query.q;
+  console.log('Historical data requested for query:', query);
+  
+  if (!query) {
+    console.log('No query parameter provided');
+    return res.status(400).json({ error: "Query parameter 'q' is required." });
+  }
+
+  try {
+    console.log('Fetching eBay history...');
+    const ebayHistory = await db.getEbayHistory(query);
+    console.log('eBay history results:', ebayHistory);
+
+    console.log('Fetching Amazon history...');
+    const amazonHistory = await db.getAmazonHistory(query);
+    console.log('Amazon history results:', amazonHistory);
+
+    const response = { ebayHistory, amazonHistory };
+    console.log('Sending response:', response);
+    
+    res.json(response);
+  } catch (error) {
+    console.error('Detailed error in historical data:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ error: "An error occurred while fetching historical data." });
+  }
+});
+
 // Start the Express server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

@@ -1,3 +1,5 @@
+// Developer: Dean Whitlock
+
 // Get the search query
 function getQuery() {
   return document.getElementById('itemQuery').value.trim();
@@ -15,126 +17,6 @@ function toggleSpinner(show) {
 function hideResults() {
   document.getElementById('ebayResults').classList.add('d-none');
   document.getElementById('amazonResults').classList.add('d-none');
-  document.getElementById('priceHistoryCard').classList.add('d-none');
-}
-
-// Load price history for a query
-function loadPriceHistory(query) {
-  fetch(`/api/price-history?q=${encodeURIComponent(query)}`)
-    .then(response => response.json())
-    .then(data => {
-      if (data.error || !data.history || data.history.length === 0) {
-        console.log('No price history available yet');
-        return;
-      }
-
-      displayPriceHistory(data.history);
-    })
-    .catch(error => {
-      console.error('Error fetching price history:', error);
-    });
-}
-
-// Display price history data
-function displayPriceHistory(historyData) {
-  const priceHistoryCard = document.getElementById('priceHistoryCard');
-  priceHistoryCard.classList.remove('d-none');
-
-  // Prepare data for chart
-  const labels = historyData.map(item => {
-    const date = new Date(item.search_date);
-    return date.toLocaleDateString();
-  });
-
-  const ebayData = historyData.map(item => item.ebay_avg_price || null);
-  const amazonNewData = historyData.map(item => item.amazon_avg_new_price || null);
-  const amazonUsedData = historyData.map(item => item.amazon_avg_used_price || null);
-
-  // Reverse arrays to show oldest to newest
-  labels.reverse();
-  ebayData.reverse();
-  amazonNewData.reverse();
-  amazonUsedData.reverse();
-
-  // Create history chart
-  const ctx = document.getElementById('historyChart').getContext('2d');
-
-  if (window.historyChartInstance) {
-    window.historyChartInstance.destroy();
-  }
-
-  window.historyChartInstance = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: labels,
-      datasets: [
-        {
-          label: 'eBay Avg Price',
-          data: ebayData,
-          borderColor: 'rgba(54, 162, 235, 1)',
-          backgroundColor: 'rgba(54, 162, 235, 0.2)',
-          tension: 0.1,
-          fill: false
-        },
-        {
-          label: 'Amazon New Avg',
-          data: amazonNewData,
-          borderColor: 'rgba(40, 167, 69, 1)',
-          backgroundColor: 'rgba(40, 167, 69, 0.2)',
-          tension: 0.1,
-          fill: false
-        },
-        {
-          label: 'Amazon Used Avg',
-          data: amazonUsedData,
-          borderColor: 'rgba(255, 193, 7, 1)',
-          backgroundColor: 'rgba(255, 193, 7, 0.2)',
-          tension: 0.1,
-          fill: false
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      scales: {
-        y: {
-          beginAtZero: false,
-          ticks: {
-            callback: function(value) {
-              return '$' + value;
-            }
-          }
-        }
-      }
-    }
-  });
-
-  // Populate history table
-  const tableBody = document.getElementById('historyTableBody');
-  tableBody.innerHTML = '';
-
-  historyData.forEach(item => {
-    const row = document.createElement('tr');
-
-    const dateCell = document.createElement('td');
-    dateCell.textContent = new Date(item.search_date).toLocaleDateString();
-
-    const ebayCell = document.createElement('td');
-    ebayCell.textContent = item.ebay_avg_price ? `$${item.ebay_avg_price}` : 'N/A';
-
-    const amazonNewCell = document.createElement('td');
-    amazonNewCell.textContent = item.amazon_avg_new_price ? `$${item.amazon_avg_new_price}` : 'N/A';
-
-    const amazonUsedCell = document.createElement('td');
-    amazonUsedCell.textContent = item.amazon_avg_used_price ? `$${item.amazon_avg_used_price}` : 'N/A';
-
-    row.appendChild(dateCell);
-    row.appendChild(ebayCell);
-    row.appendChild(amazonNewCell);
-    row.appendChild(amazonUsedCell);
-
-    tableBody.appendChild(row);
-  });
 }
 
 // -------------------------
@@ -153,9 +35,7 @@ document.getElementById('ebaySearchBtn').addEventListener('click', function () {
     .then(data => {
       toggleSpinner(false);
       displayEbayResults(data);
-
-      // Load price history after successful search
-      loadPriceHistory(query);
+      loadHistoricalData(query);
     })
     .catch(error => {
       toggleSpinner(false);
@@ -216,6 +96,9 @@ function displayEbayResults(data) {
     listItem.innerHTML = `<a href="${item.link}" target="_blank">${item.title}</a> - $${item.soldPrice}`;
     listGroup.appendChild(listItem);
   });
+
+  // New: Display item image
+  document.getElementById('ebayItemImage').src = data.itemImage;
 }
 
 // -------------------------
@@ -234,9 +117,7 @@ document.getElementById('amazonSearchBtn').addEventListener('click', function ()
     .then(data => {
       toggleSpinner(false);
       displayAmazonResults(data);
-
-      // Load price history after successful search
-      loadPriceHistory(query);
+      loadHistoricalData(query);
     })
     .catch(error => {
       toggleSpinner(false);
@@ -293,6 +174,9 @@ function displayAmazonResults(data) {
       }
     }
   });
+
+  // New: Display item image
+  document.getElementById('amazonItemImage').src = data.itemImage;
 }
 
 // -----------------------------
@@ -423,11 +307,106 @@ function removeFromWishlist(id) {
   });
 }
 
+// Check if user is logged in
+function checkLoginStatus() {
+  const token = localStorage.getItem('token');
+  if (token) {
+    document.getElementById('loginOptionsSection').classList.add('d-none');
+  }
+}
+
 // Add event listeners
 document.addEventListener('DOMContentLoaded', function() {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    window.location.href = '/login.html';
+    return;
+  }
+
+  checkLoginStatus();
+
+  document.getElementById('wishlistForm').addEventListener('submit', addToWishlist);
+
+  document.getElementById('logoutBtn').addEventListener('click', function() {
+    localStorage.removeItem('token');
+    window.location.href = '/login.html';
+  });
+
   // Load wishlist when page loads
   loadWishlist();
-
-  // Handle wishlist form submission
-  document.getElementById('wishlistForm').addEventListener('submit', addToWishlist);
 });
+
+function loadHistoricalData(query) {
+  console.log('Requesting historical data for:', query);
+  
+  fetch(`/api/historical-data?q=${encodeURIComponent(query)}`)
+    .then(response => {
+      console.log('Historical data response status:', response.status);
+      return response.json();
+    })
+    .then(data => {
+      console.log('Historical data received:', data);
+      
+      if (data.error) {
+        console.error('Error in historical data:', data.error);
+        return;
+      }
+      
+      if (!data.ebayHistory.length && !data.amazonHistory.length) {
+        console.log('No historical data available yet');
+        return;
+      }
+
+      displayHistoricalData(data);
+    })
+    .catch(error => {
+      console.error('Error fetching historical data:', error);
+    });
+}
+
+function displayHistoricalData(data) {
+  console.log('Displaying historical data:', data);
+  const ebayHistory = data.ebayHistory;
+  const amazonHistory = data.amazonHistory;
+
+  // Display eBay historical data
+  const ebayTableBody = document.getElementById('ebay-history-table');
+  ebayTableBody.innerHTML = '';
+  ebayHistory.forEach(record => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${new Date(record.timestamp).toLocaleDateString()}</td>
+      <td>$${record.avg_price.toFixed(2)}</td>
+      <td>$${record.high_price.toFixed(2)}</td>
+      <td>$${record.low_price.toFixed(2)}</td>
+      <td>${record.total_sales}</td>
+    `;
+    ebayTableBody.appendChild(row);
+  });
+
+  // Display Amazon historical data
+  const amazonTableBody = document.getElementById('amazon-history-table');
+  amazonTableBody.innerHTML = '';
+  
+  if (amazonHistory.length === 0) {
+    const row = document.createElement('tr');
+    row.innerHTML = '<td colspan="9" class="text-center">No Amazon price history available</td>';
+    amazonTableBody.appendChild(row);
+  } else {
+    amazonHistory.forEach(record => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${new Date(record.timestamp).toLocaleDateString()}</td>
+        <td>${record.avg_new_price ? `$${record.avg_new_price.toFixed(2)}` : 'N/A'}</td>
+        <td>${record.high_new_price ? `$${record.high_new_price.toFixed(2)}` : 'N/A'}</td>
+        <td>${record.low_new_price ? `$${record.low_new_price.toFixed(2)}` : 'N/A'}</td>
+        <td>${record.total_new || 0}</td>
+        <td>${record.avg_used_price ? `$${record.avg_used_price.toFixed(2)}` : 'N/A'}</td>
+        <td>${record.high_used_price ? `$${record.high_used_price.toFixed(2)}` : 'N/A'}</td>
+        <td>${record.low_used_price ? `$${record.low_used_price.toFixed(2)}` : 'N/A'}</td>
+        <td>${record.total_used || 0}</td>
+      `;
+      amazonTableBody.appendChild(row);
+    });
+  }
+}
