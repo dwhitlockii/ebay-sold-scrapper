@@ -11,14 +11,15 @@
     "axios": "^1.4.0",
     "bcrypt": "^5.0.1",
     "better-sqlite3": "^11.8.1",
+    "chart.js": "^4.0.1",
     "cheerio": "^1.0.0-rc.12",
     "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
     "express": "^4.18.2",
     "express-rate-limit": "^7.5.0",
     "jsonwebtoken": "^9.0.0",
     "sqlite3": "^5.1.7",
-    "chart.js": "^4.0.1",
-    "dotenv": "^16.0.3"
+    "winston": "^3.17.0"
   },
   "devDependencies": {
     "nodemon": "^2.0.22"

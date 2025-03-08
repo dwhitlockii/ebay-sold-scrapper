@@ -11,6 +11,9 @@ const cors = require('cors'); // Add CORS middleware
 const db = require('./database');
 const { saveEbayResults } = require('./database');
 
+// Add this near the top of the file after the imports
+const DEBUG = true;
+
 // Initialize the database
 db.initDatabase();
 
@@ -42,6 +45,57 @@ const loginLimiter = rateLimit({
   max: 5, // Limit each IP to 5 login requests per windowMs
   message: 'Too many login attempts from this IP, please try again after 15 minutes'
 });
+
+// Add array of rotating user agents
+const userAgents = [
+  // Windows browsers
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/92.0.902.73',
+  // macOS browsers
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Safari/605.1.15',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36',
+  // Mobile browsers
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 14_7_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Mobile/15E148 Safari/604.1',
+  'Mozilla/5.0 (Linux; Android 11; SM-G998B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Mobile Safari/537.36'
+];
+
+// Add proxy support (configure with your proxy service)
+const proxies = [
+  'http://proxy1.example.com:8080',
+  'http://proxy2.example.com:8080',
+  'http://proxy3.example.com:8080',
+  'http://proxy4.example.com:8080',
+  'http://proxy5.example.com:8080'
+].map(proxy => ({
+  host: proxy.split('://')[1].split(':')[0],
+  port: proxy.split(':')[2],
+  protocol: proxy.split('://')[0]
+}));
+
+// Simple in-memory cache
+const cache = new Map();
+const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+
+// Enhanced error logging
+const winston = require('winston');
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.File({ filename: 'error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'combined.log' })
+  ]
+});
+
+if (process.env.NODE_ENV !== 'production') {
+  logger.add(new winston.transports.Console({
+    format: winston.format.simple()
+  }));
+}
 
 // User registration
 app.post('/api/register', async (req, res) => {
@@ -106,110 +160,160 @@ app.get('/register.html', (req, res) => {
 // ---------------------------
 
 app.get('/api/search', async (req, res) => {
+  if (DEBUG) console.log('\n=== DEBUG: /api/search endpoint ===');
   const query = req.query.q;
+  
+  if (DEBUG) {
+      console.log('Query:', query);
+      console.log('Headers:', req.headers);
+  }
+
   if (!query) {
-    return res.status(400).json({ error: "Query parameter 'q' is required." });
+      if (DEBUG) console.log('No query parameter provided');
+      return res.status(400).json({ error: "Query parameter 'q' is required." });
   }
 
   try {
-    // Construct the eBay URL for sold/completed items
-    let ebayUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(query)}&LH_Sold=1&LH_Complete=1`;
-    console.log(`Fetching URL: ${ebayUrl}`);
+      let ebayUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(query)}&LH_Sold=1&LH_Complete=1`;
+      if (DEBUG) console.log('eBay URL:', ebayUrl);
 
-    // Fetch the eBay page HTML.
-    const response = await axios.get(ebayUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
-                      'AppleWebKit/537.36 (KHTML, like Gecko) ' +
-                      'Chrome/90.0.4430.93 Safari/537.36'
-      }
-    });
-    const html = response.data;
-    const $ = cheerio.load(html);
-
-    console.log(`Found ${$('.s-item').length} elements with '.s-item' selector.`);
-    let items = [];
-    $('.s-item').each((i, el) => {
-      // Try to extract price using primary and fallback selectors.
-      let priceText = $(el).find('.s-item__price').first().text().trim();
-      if (!priceText) {
-        priceText = $(el).find('span[itemprop="price"]').first().text().trim();
-      }
-
-      if (priceText) {
-        const soldPrice = parseFloat(priceText.replace(/[^0-9\.]/g, ''));
-
-        // Try to extract sold date information.
-        let soldDateText = $(el).find('.s-item__title--tagblock').first().text().trim();
-        let soldDate;
-        if (soldDateText && soldDateText.match(/\d{2}\/\d{2}\/\d{4}/)) {
-          soldDate = new Date(soldDateText);
-        } else {
-          // If no date is found, simulate a sold date within the last 30 days.
-          const today = new Date();
-          const pastTime = Math.random() * 30 * 24 * 60 * 60 * 1000;
-          soldDate = new Date(today.getTime() - pastTime);
-        }
-
-        // Extract the sold item title and link.
-        let title = $(el).find('.s-item__title').first().text().trim();
-        let link = $(el).find('.s-item__link').attr('href');
-
-        if (!isNaN(soldPrice)) {
-          items.push({ title, link, soldPrice, soldDate });
-        }
-      }
-    });
-
-    if (items.length === 0) {
-      console.log("No valid sold items were scraped.");
-      return res.status(404).json({ 
-        error: "No sold item data could be scraped. The page structure may have changed or there are no sold listings for this query." 
+      const response = await axios.get(ebayUrl, {
+          headers: {
+              'User-Agent': userAgents[Math.floor(Math.random() * userAgents.length)]
+          }
       });
-    }
 
-    // Compute aggregate metrics.
-    const totalSales = items.length;
-    const sumPrices = items.reduce((sum, item) => sum + item.soldPrice, 0);
-    const avgPrice = parseFloat((sumPrices / totalSales).toFixed(2));
-    const highPrice = Math.max(...items.map(item => item.soldPrice));
-    const lowPrice = Math.min(...items.map(item => item.soldPrice));
-
-    // Group sales over time (by date in YYYY-MM-DD format).
-    const salesOverTimeObj = {};
-    items.forEach(item => {
-      const date = new Date(item.soldDate).toISOString().slice(0, 10);
-      salesOverTimeObj[date] = (salesOverTimeObj[date] || 0) + 1;
-    });
-    const datesSorted = Object.keys(salesOverTimeObj).sort();
-    const salesCounts = datesSorted.map(date => salesOverTimeObj[date]);
-
-    // Save results to database
-    db.saveEbayResults(query, {
-      aggregates: {
-        avgPrice,
-        highPrice,
-        lowPrice,
-        totalSales
+      if (DEBUG) {
+          console.log('eBay Response Status:', response.status);
+          console.log('Response Headers:', response.headers);
       }
-    });
 
-    res.json({
-      items,
-      aggregates: {
-        avgPrice,
-        highPrice,
-        lowPrice,
-        totalSales,
-        salesOverTime: {
-          dates: datesSorted,
-          counts: salesCounts
+      const $ = cheerio.load(response.data);
+
+      let items = [];
+      
+      // Improved selector to only get actual sold items
+      $('.s-item__pl-on-bottom').each((i, el) => {
+        try {
+          const $item = $(el);
+          
+          // Skip if this is a "Shop on eBay" or "Similar sponsored items" listing
+          const title = $item.find('.s-item__title').first().text().trim();
+          if (title === "Shop on eBay" || !title) {
+            return;
+          }
+
+          // Verify this is actually a sold item
+          const soldElement = $item.find('.s-item__title--tag, .POSITIVE, .SECONDARY_INFO').text();
+          if (!soldElement.includes('Sold')) {
+            return;
+          }
+
+          let priceText = $item.find('.s-item__price').first().text().trim();
+          let soldDateText = $item.find('.s-item__title--tagblock, .POSITIVE').first().text().trim();
+          let link = $item.find('.s-item__link').attr('href');
+          let image = $item.find('.s-item__image-img').attr('src');
+          let condition = $item.find('.SECONDARY_INFO').first().text().trim();
+
+          // More robust price parsing
+          const priceMatch = priceText.match(/\$\s?([0-9]+[,.][0-9]+)/);
+          if (!priceMatch) {
+            console.log(`Skipping item with invalid price format: ${priceText}`);
+            return;
+          }
+
+          const soldPrice = parseFloat(priceMatch[1].replace(',', ''));
+          
+          // Skip items with invalid prices
+          if (isNaN(soldPrice) || soldPrice <= 0) {
+            console.log(`Skipping item with invalid price: ${soldPrice}`);
+            return;
+          }
+
+          // Parse the date
+          const dateMatch = soldDateText.match(/Sold\s+([A-Za-z]+\s+\d+,\s+\d{4})|(\d{2}\/\d{2}\/\d{4})/);
+          const soldDate = dateMatch ? new Date(dateMatch[1] || dateMatch[2]) : new Date();
+
+          items.push({
+            title,
+            link,
+            image,
+            soldPrice,
+            soldDate,
+            condition,
+            soldDateText: soldDateText.replace(/Sold\s+/, '')
+          });
+
+          console.log(`Valid item ${items.length}:`, {
+            title: title.substring(0, 50) + '...',
+            price: soldPrice,
+            date: soldDate
+          });
+
+        } catch (err) {
+          console.error('Error parsing item:', err.message);
         }
+      });
+
+      if (items.length === 0) {
+        console.log("No valid sold items were scraped.");
+        return res.status(404).json({ 
+          error: "No sold item data could be scraped." 
+        });
       }
-    });
+
+      const totalSales = items.length;
+      const sumPrices = items.reduce((sum, item) => sum + item.soldPrice, 0);
+      const avgPrice = parseFloat((sumPrices / totalSales).toFixed(2));
+      const highPrice = Math.max(...items.map(item => item.soldPrice));
+      const lowPrice = Math.min(...items.map(item => item.soldPrice)); // Fixed the error here
+
+      const salesOverTimeObj = {};
+      items.forEach(item => {
+        const date = new Date(item.soldDate).toISOString().slice(0, 10);
+        salesOverTimeObj[date] = (salesOverTimeObj[date] || 0) + 1;
+      });
+      const datesSorted = Object.keys(salesOverTimeObj).sort();
+      const salesCounts = datesSorted.map(date => salesOverTimeObj[date]);
+
+      // Save to database
+      db.saveEbayResults(query, {
+        aggregates: {
+          avgPrice,
+          highPrice,
+          lowPrice,
+          totalSales
+        }
+      });
+
+      if (DEBUG) {
+        console.log(`Found ${items.length} items`);
+        console.log('First item example:', items[0]);
+        console.log('=== End DEBUG ===\n');
+      }
+
+      res.json({
+        items,
+        aggregates: {
+          avgPrice,
+          highPrice,
+          lowPrice,
+          totalSales,
+          salesOverTime: {
+            dates: datesSorted,
+            counts: salesCounts
+          }
+        }
+      });
+
   } catch (error) {
-    console.error('Error during scraping:', error.message);
-    res.status(500).json({ error: "An error occurred while scraping eBay data." });
+      console.error('Error during scraping:', error);
+      console.error('Stack trace:', error.stack);
+      res.status(500).json({ 
+          error: "An error occurred while scraping eBay data.",
+          details: error.message,
+          stack: error.stack
+      });
   }
 });
 
@@ -228,105 +332,6 @@ app.post('/search-ebay', async (req, res) => {
   } catch (error) {
     console.error('Error fetching eBay data:', error);
     res.status(500).json({ error: 'Failed to fetch eBay data' });
-  }
-});
-
-// ---------------------------
-// Amazon New & Used Scraping API
-// ---------------------------
-
-app.get('/api/search/amazon', async (req, res) => {
-  const query = req.query.q;
-  if (!query) {
-    return res.status(400).json({ error: "Query parameter 'q' is required." });
-  }
-  try {
-    const amazonUrl = `https://www.amazon.com/s?k=${encodeURIComponent(query)}`;
-    console.log(`Fetching Amazon URL: ${amazonUrl}`);
-    const response = await axios.get(amazonUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
-                      'AppleWebKit/537.36 (KHTML, like Gecko) ' +
-                      'Chrome/90.0.4430.93 Safari/537.36'
-      }
-    });
-    const html = response.data;
-    const $ = cheerio.load(html);
-    let items = [];
-    // Each Amazon search result is in a container with this attribute.
-    $('div[data-component-type="s-search-result"]').each((i, el) => {
-      const title = $(el).find('h2 a span').text().trim();
-      if (!title) {
-        return; // Skip if no title is found.
-      }
-      let newPrice = null;
-      let usedPrice = null;
-
-      // Extract new price for this product.
-      const newPriceText = $(el).find('span.a-price > span.a-offscreen').first().text().trim();
-      if (newPriceText) {
-        newPrice = parseFloat(newPriceText.replace(/[^0-9\.]/g, ''));
-      }
-
-      // Extract used price if available (looking for text like "Used from $XX.XX")
-      let usedPriceText = "";
-      $(el).find('span.a-size-base.a-color-price').each((j, usedEl) => {
-        const text = $(usedEl).text().trim();
-        if (text.toLowerCase().includes("used from")) {
-          usedPriceText = text;
-        }
-      });
-      if (usedPriceText) {
-        const match = usedPriceText.match(/\$([0-9\.,]+)/);
-        if (match) {
-          usedPrice = parseFloat(match[1].replace(/,/g, ''));
-        }
-      }
-      items.push({ title, newPrice, usedPrice });
-    });
-
-    // Filter out items without any price info.
-    items = items.filter(item => item.newPrice !== null || item.usedPrice !== null);
-
-    if (items.length === 0) {
-      console.log("No relevant Amazon data was scraped.");
-      return res.status(404).json({ error: "No relevant Amazon data could be scraped for this query." });
-    }
-
-    // Compute aggregates for new prices.
-    const newItems = items.filter(item => item.newPrice !== null);
-    const totalNew = newItems.length;
-    const sumNew = newItems.reduce((sum, item) => sum + item.newPrice, 0);
-    const avgNew = totalNew ? parseFloat((sumNew / totalNew).toFixed(2)) : null;
-    const highNew = totalNew ? Math.max(...newItems.map(item => item.newPrice)) : null;
-    const lowNew = totalNew ? Math.min(...newItems.map(item => item.newPrice)) : null;
-
-    // Compute aggregates for used prices.
-    const usedItems = items.filter(item => item.usedPrice !== null);
-    const totalUsed = usedItems.length;
-    const sumUsed = usedItems.reduce((sum, item) => sum + item.usedPrice, 0);
-    const avgUsed = totalUsed ? parseFloat((sumUsed / totalUsed).toFixed(2)) : null;
-    const highUsed = totalUsed ? Math.max(...usedItems.map(item => item.usedPrice)) : null;
-    const lowUsed = totalUsed ? Math.min(...usedItems.map(item => item.usedPrice)) : null;
-
-    // Save results to database
-    db.saveAmazonResults(query, {
-      aggregates: {
-        new: { totalNew, avgNew, highNew, lowNew },
-        used: { totalUsed, avgUsed, highUsed, lowUsed }
-      }
-    });
-
-    res.json({
-      items,
-      aggregates: {
-        new: { totalNew, avgNew, highNew, lowNew },
-        used: { totalUsed, avgUsed, highUsed, lowUsed }
-      }
-    });
-  } catch (error) {
-    console.error("Error during Amazon scraping:", error.message);
-    res.status(500).json({ error: "An error occurred while scraping Amazon data." });
   }
 });
 
@@ -401,29 +406,38 @@ app.get('/api/analytics/:productId', async (req, res) => {
 
 app.get('/api/historical-data', async (req, res) => {
   const query = req.query.q;
-  console.log('Historical data requested for query:', query);
+  console.log('\n=== Historical Data Debug ===');
+  console.log('Query:', query);
   
   if (!query) {
-    console.log('No query parameter provided');
+    console.log('ERROR: No query parameter provided');
+    console.log('===========================');
     return res.status(400).json({ error: "Query parameter 'q' is required." });
   }
 
   try {
-    console.log('Fetching eBay history...');
+    // eBay History Debug
+    console.log('\n--- eBay History ---');
+    console.log('eBay Search URL:', `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(query)}&LH_Sold=1&LH_Complete=1`);
+    console.log('Executing query for:', query);
     const ebayHistory = await db.getEbayHistory(query);
-    console.log('eBay history results:', ebayHistory);
+    console.log('Records found:', ebayHistory.length);
+    if (ebayHistory.length > 0) {
+      console.log('Latest record:', ebayHistory[0]);
+      console.log('Oldest record:', ebayHistory[ebayHistory.length - 1]);
+    }
 
-    console.log('Fetching Amazon history...');
-    const amazonHistory = await db.getAmazonHistory(query);
-    console.log('Amazon history results:', amazonHistory);
-
-    const response = { ebayHistory, amazonHistory };
-    console.log('Sending response:', response);
+    const response = { ebayHistory };
+    console.log('\nResponse summary:');
+    console.log('eBay records:', ebayHistory.length);
+    console.log('Search URL:', `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(query)}&LH_Sold=1&LH_Complete=1`);
+    console.log('===========================\n');
     
     res.json(response);
   } catch (error) {
-    console.error('Detailed error in historical data:', error);
-    console.error('Error stack:', error.stack);
+    console.error('\nERROR in historical data:', error);
+    console.error('Stack:', error.stack);
+    console.log('===========================\n');
     res.status(500).json({ error: "An error occurred while fetching historical data." });
   }
 });

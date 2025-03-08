@@ -1,51 +1,59 @@
-# eBay & Amazon Price Scraper
+# eBay & Amazon Price Tracker
 
-## Overview
+A web application that tracks sold item prices on eBay and Amazon, with historical data analysis and price alerts.
 
-This project allows users to track and compare price history for products on eBay and Amazon. It features a responsive interface that displays historical price data, real-time price comparisons, and price tracking capabilities.
+## Features
 
-## Key Features
+- **eBay Price Tracking**
+  - Search sold item listings
+  - View average, high, and low prices
+  - Track total sales volume
+  - Interactive price history charts
+  - Detailed sold item listings with links
 
-- **Historical Price Data**
-  - View detailed price history for both eBay and Amazon
-  - Compare trends between platforms
-  - Analyze price fluctuations over time
-  - Data presented in easy-to-read tables
+- **Amazon Price Tracking**
+  - Current product price lookup
+  - Product images and links
+  - Price history tracking
 
-- **Real-Time Price Tracking**
-  - Search eBay sold listings
-  - Track Amazon new/used prices
-  - Visual price comparisons with charts
-  - Daily sales tracking
+- **Historical Data Analysis**
+  - Price trends over time
+  - Sales volume trends
+  - Sparkline visualizations
+  - Daily price aggregates
 
 - **User Features**
+  - User authentication
   - Wishlist management
   - Price alerts
-  - User authentication
-  - Customizable notifications
+  - Email notifications
 
-## Recent Updates
+- **Data Visualization**
+  - Interactive charts using Chart.js
+  - Sales trend analysis
+  - Price movement indicators
+  - Historical comparisons
 
-### 1. Enhanced Historical Data Display
-- Historical data tables moved above product results for better visibility
-- Separate tables for eBay and Amazon price history
-- Improved data formatting and readability
-- Automatic data refresh on new searches
+## Technical Stack
 
-### 2. Data Tables Structure
+- **Frontend**
+  - HTML5/CSS3/JavaScript
+  - Bootstrap 5
+  - Chart.js for visualizations
+  - Responsive design
 
-**eBay Price History Table:**
-- Date
-- Average Price
-- Highest Price
-- Lowest Price
-- Total Sales
+- **Backend**
+  - Node.js with Express
+  - SQLite3 database
+  - JWT authentication
+  - Web scraping with Cheerio
 
-**Amazon Price History Table:**
-- Date
-- New Item Prices (Avg/High/Low)
-- Used Item Prices (Avg/High/Low)
-- Total Items (New/Used)
+- **Features**
+  - Rate limiting
+  - Proxy support
+  - User agent rotation
+  - Error logging
+  - Caching system
 
 ## Installation
 
