@@ -1,0 +1,11 @@
+{
+  "rateLimit": {
+    "maxRequests": 30,
+    "windowMs": 900000
+  },
+  "proxy": {
+    "proxyList": [],
+    "rotationStrategy": "round-robin",
+    "currentIndex": 0
+  }
+}

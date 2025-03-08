@@ -11,11 +11,6 @@ A web application that tracks sold item prices on eBay and Amazon, with historic
   - Interactive price history charts
   - Detailed sold item listings with links
 
-- **Amazon Price Tracking**
-  - Current product price lookup
-  - Product images and links
-  - Price history tracking
-
 - **Historical Data Analysis**
   - Price trends over time
   - Sales volume trends
@@ -27,6 +22,13 @@ A web application that tracks sold item prices on eBay and Amazon, with historic
   - Wishlist management
   - Price alerts
   - Email notifications
+
+- **Settings & Configuration**
+  - Customizable rate limiting
+  - Proxy management
+    - Multiple proxy support
+    - Round-robin or random rotation
+  - User-configurable thresholds
 
 - **Data Visualization**
   - Interactive charts using Chart.js
@@ -49,8 +51,8 @@ A web application that tracks sold item prices on eBay and Amazon, with historic
   - Web scraping with Cheerio
 
 - **Features**
-  - Rate limiting
-  - Proxy support
+  - Configurable rate limiting
+  - Proxy rotation support
   - User agent rotation
   - Error logging
   - Caching system

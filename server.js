@@ -10,6 +10,7 @@ const rateLimit = require('express-rate-limit');
 const cors = require('cors'); // Add CORS middleware
 const db = require('./database');
 const { saveEbayResults } = require('./database');
+const settings = require('./settings');
 
 // Add this near the top of the file after the imports
 const DEBUG = true;
@@ -37,6 +38,56 @@ function authenticateToken(req, res, next) {
     req.user = user;
     next();
   });
+}
+
+// Create a dynamic rate limiter
+function createRateLimiter() {
+    const rateLimitSettings = settings.getRateLimitSettings();
+    return rateLimit({
+        windowMs: rateLimitSettings.windowMs,
+        max: rateLimitSettings.maxRequests
+    });
+}
+
+// Settings routes
+app.get('/api/settings/ratelimit', (req, res) => {
+    res.json(settings.getRateLimitSettings());
+});
+
+app.post('/api/settings/ratelimit', async (req, res) => {
+    try {
+        await settings.updateRateLimit(req.body);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.get('/api/settings/proxy', (req, res) => {
+    res.json(settings.getProxySettings());
+});
+
+app.post('/api/settings/proxy', async (req, res) => {
+    try {
+        await settings.updateProxy(req.body);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Apply rate limiting to API routes
+app.use('/api/', createRateLimiter());
+
+// Use proxy in API calls
+async function makeRequest(url) {
+    const proxy = settings.getNextProxy();
+    if (proxy) {
+        // Use the proxy for the request
+        const agent = new HttpsProxyAgent(proxy);
+        return await axios.get(url, { httpsAgent: agent });
+    }
+    return await axios.get(url);
 }
 
 // Rate limiter for login attempts

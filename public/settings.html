@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Settings - eBay & Amazon Price Tracker</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container mt-5">
+        <!-- Add back button at the top -->
+        <div class="mb-4">
+            <a href="/" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Home
+            </a>
+        </div>
+
+        <h2>Settings</h2>
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h4>Rate Limiting</h4>
+            </div>
+            <div class="card-body">
+                <form id="rateLimitForm">
+                    <div class="mb-3">
+                        <label for="maxRequests" class="form-label">Max Requests</label>
+                        <input type="number" class="form-control" id="maxRequests" min="1" max="100">
+                        <small class="text-muted">Maximum number of requests per window</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="windowMs" class="form-label">Time Window (minutes)</label>
+                        <input type="number" class="form-control" id="windowMs" min="1">
+                        <small class="text-muted">Time window in minutes</small>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Rate Limits</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h4>Proxy Settings</h4>
+            </div>
+            <div class="card-body">
+                <form id="proxyForm">
+                    <div class="mb-3">
+                        <label for="proxyList" class="form-label">Proxy List</label>
+                        <textarea class="form-control" id="proxyList" rows="5" placeholder="Enter one proxy per line in format: http://hostname:port"></textarea>
+                        <small class="text-muted">Enter each proxy on a new line</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="proxyRotation" class="form-label">Rotation Strategy</label>
+                        <select class="form-control" id="proxyRotation">
+                            <option value="round-robin">Round Robin</option>
+                            <option value="random">Random</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save Proxy Settings</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/settings.js"></script>
+</body>
+</html>
