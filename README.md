@@ -2,15 +2,50 @@
 
 ## Overview
 
-This project allows users to scrape and compare historical price data for products sold on eBay and Amazon. It provides a user-friendly interface to search for products, view historical price data, and manage a wishlist.
+This project allows users to track and compare price history for products on eBay and Amazon. It features a responsive interface that displays historical price data, real-time price comparisons, and price tracking capabilities.
 
-## Features
+## Key Features
 
-- Search for products on eBay and Amazon
-- View historical price data for eBay and Amazon
-- Track price changes over time with charts
-- Manage a wishlist with target prices
-- User authentication and login options
+- **Historical Price Data**
+  - View detailed price history for both eBay and Amazon
+  - Compare trends between platforms
+  - Analyze price fluctuations over time
+  - Data presented in easy-to-read tables
+
+- **Real-Time Price Tracking**
+  - Search eBay sold listings
+  - Track Amazon new/used prices
+  - Visual price comparisons with charts
+  - Daily sales tracking
+
+- **User Features**
+  - Wishlist management
+  - Price alerts
+  - User authentication
+  - Customizable notifications
+
+## Recent Updates
+
+### 1. Enhanced Historical Data Display
+- Historical data tables moved above product results for better visibility
+- Separate tables for eBay and Amazon price history
+- Improved data formatting and readability
+- Automatic data refresh on new searches
+
+### 2. Data Tables Structure
+
+**eBay Price History Table:**
+- Date
+- Average Price
+- Highest Price
+- Lowest Price
+- Total Sales
+
+**Amazon Price History Table:**
+- Date
+- New Item Prices (Avg/High/Low)
+- Used Item Prices (Avg/High/Low)
+- Total Items (New/Used)
 
 ## Installation
 
@@ -51,23 +86,6 @@ This project allows users to scrape and compare historical price data for produc
 - `database.js`: Database setup and functions
 - `notifications.js`: Notification handling functions
 - `.gitignore`: Git ignore file
-
-## New Features
-
-### Historical Data Section
-
-The historical data section has been moved above the eBay Sold Items Aggregate section for better visibility. It includes two tables:
-
-- **eBay Price History**: Displays historical price data for eBay.
-- **Amazon Price History**: Displays historical price data for Amazon.
-
-### Wishlist Management
-
-Users can add products to their wishlist with optional target prices. The wishlist is displayed in a table format with options to remove items.
-
-### User Reviews
-
-Users can submit reviews and ratings for products. Reviews are displayed in a table format.
 
 ## API Endpoints
 
