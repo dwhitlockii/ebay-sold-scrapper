@@ -1,68 +1,70 @@
-# eBay & Amazon Price Tracker
+# eBay Sold Items Price Tracker
 
-A web application that tracks sold item prices on eBay and Amazon, with historical data analysis and price alerts.
+A powerful web application that tracks and analyzes eBay sold item prices, providing historical data analysis and price alerts.
 
 ## Features
 
-- **eBay Price Tracking**
-  - Search sold item listings
-  - View average, high, and low prices
-  - Track total sales volume
-  - Interactive price history charts
-  - Detailed sold item listings with links
+- **eBay Price Analysis**
+  - Search sold item listings with real-time results
+  - View comprehensive price statistics:
+    - Average price
+    - Highest price
+    - Lowest price
+    - Total sales volume
+  - Interactive price history charts with sparklines
+  - Detailed sold item listings with direct eBay links
+  - Product images with fallback support
 
-- **Historical Data Analysis**
-  - Price trends over time
-  - Sales volume trends
-  - Sparkline visualizations
-  - Daily price aggregates
+- **Historical Data Tracking**
+  - Automated price tracking over time
+  - Trend visualization with sparkline charts
+  - Price movement indicators
+  - Detailed historical records with:
+    - Date-wise price aggregation
+    - Sales volume tracking
+    - High/low price points
 
 - **User Features**
-  - User authentication
-  - Wishlist management
-  - Price alerts
-  - Email notifications
+  - User authentication with multiple options:
+    - Email/password registration
+    - Google login
+    - Apple login
+    - Facebook login
+  - Personalized wishlist management
+  - Price alert system with email notifications
+  - User reviews and ratings
 
-- **Settings & Configuration**
-  - Customizable rate limiting
-  - Proxy management
-    - Multiple proxy support
-    - Round-robin or random rotation
-  - User-configurable thresholds
-
-- **Data Visualization**
-  - Interactive charts using Chart.js
-  - Sales trend analysis
-  - Price movement indicators
-  - Historical comparisons
+- **Advanced Features**
+  - Rate limiting for API protection
+  - Proxy support with rotation
+  - Caching system for improved performance
+  - Responsive design for all devices
+  - Real-time price alerts
+  - Duplicate entry prevention
 
 ## Technical Stack
 
 - **Frontend**
   - HTML5/CSS3/JavaScript
-  - Bootstrap 5
-  - Chart.js for visualizations
-  - Responsive design
+  - Bootstrap 5 for responsive design
+  - Font Awesome icons
+  - Chart.js for data visualization
+  - Custom animations and transitions
 
 - **Backend**
   - Node.js with Express
-  - SQLite3 database
-  - JWT authentication
-  - Web scraping with Cheerio
-
-- **Features**
-  - Configurable rate limiting
-  - Proxy rotation support
-  - User agent rotation
-  - Error logging
-  - Caching system
+  - SQLite3 for data persistence
+  - Better-SQLite3 for improved performance
+  - JWT for authentication
+  - Cheerio for web scraping
+  - Winston for logging
 
 ## Installation
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/ebay-amazon-scraper.git
-   cd ebay-amazon-scraper
+   git clone https://github.com/yourusername/ebay-sold-scrapper.git
+   cd ebay-sold-scrapper
    ```
 
 2. Install dependencies:
@@ -70,51 +72,79 @@ A web application that tracks sold item prices on eBay and Amazon, with historic
    npm install
    ```
 
-3. Set up the database:
+3. Create a `.env` file with required environment variables:
+   ```env
+   PORT=3001
+   JWT_SECRET=your_jwt_secret
+   REFRESH_SECRET=your_refresh_secret
+   EMAIL_SERVICE_API_KEY=your_email_api_key
+   ```
+
+4. Initialize the database:
    ```bash
    node database.js
    ```
 
-## Usage
-
-1. Start the server:
+5. Start the development server:
    ```bash
-   npm start
+   npm run dev
    ```
 
-2. Open your browser and navigate to `http://localhost:3000`.
+## Usage
 
-## File Structure
-
-- `public/`
-  - `index.html`: Main HTML file with the user interface
-  - `style.css`: Custom CSS for styling
-  - `main.js`: Client-side JavaScript for handling user interactions
-  - `login.html`: HTML file for the login page
-  - `login.js`: Client-side JavaScript for handling login interactions
-
-- `database.js`: Database setup and functions
-- `notifications.js`: Notification handling functions
-- `.gitignore`: Git ignore file
+1. Access the application at `http://localhost:3001`
+2. Create an account or log in
+3. Enter a product name in the search bar
+4. View real-time price analysis and historical data
+5. Set up price alerts for tracked items
+6. Add items to your wishlist for easy tracking
 
 ## API Endpoints
 
-- `/api/search/ebay`: Search for products on eBay
-- `/api/search/amazon`: Search for products on Amazon
-- `/api/wishlist`: Manage wishlist items
-- `/api/reviews`: Submit and view user reviews
+- **Search**
+  - `POST /api/search` - Search for eBay sold items
+  - `GET /api/history/:query` - Get historical price data
+
+- **Authentication**
+  - `POST /api/auth/register` - Register new user
+  - `POST /api/auth/login` - User login
+  - `POST /api/auth/refresh` - Refresh access token
+
+- **Wishlist**
+  - `GET /api/wishlist` - Get user's wishlist
+  - `POST /api/wishlist` - Add item to wishlist
+  - `DELETE /api/wishlist/:id` - Remove item from wishlist
+
+- **Price Alerts**
+  - `POST /api/price-alerts` - Create price alert
+  - `GET /api/price-alerts` - Get user's price alerts
+
+## Security Features
+
+- JWT-based authentication
+- Rate limiting protection
+- SQL injection prevention
+- XSS protection
+- CORS configuration
+- Secure password hashing
 
 ## Contributing
 
 1. Fork the repository
-2. Create a new branch (`git checkout -b feature-branch`)
-3. Make your changes
-4. Commit your changes (`git commit -am 'Add new feature'`)
-5. Push to the branch (`git push origin feature-branch`)
-6. Create a new Pull Request
+2. Create a feature branch: `git checkout -b feature-name`
+3. Commit changes: `git commit -am 'Add feature'`
+4. Push to branch: `git push origin feature-name`
+5. Submit a Pull Request
 
 ## License
 
 This project is licensed under the MIT License.
+
+## Acknowledgments
+
+- eBay for product data
+- Bootstrap team for UI components
+- Chart.js for visualization tools
+- Open source community for various tools and libraries
 
 

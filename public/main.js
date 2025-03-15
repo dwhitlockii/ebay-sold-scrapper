@@ -2,21 +2,155 @@
 
 // Get the search query
 function getQuery() {
-  return document.getElementById('itemQuery').value.trim();
+  const searchInput = document.getElementById('itemQuery');
+  return searchInput ? searchInput.value.trim() : '';
 }
 
 function toggleSpinner(show) {
   const spinner = document.getElementById('loadingSpinner');
-  if (show) {
-    spinner.classList.remove('d-none');
-  } else {
-    spinner.classList.add('d-none');
-  }
+  const results = document.getElementById('results');
+  if (spinner) spinner.style.display = show ? 'block' : 'none';
+  if (results) results.style.display = show ? 'none' : 'block';
 }
 
 function hideResults() {
-  document.getElementById('ebayResults').classList.add('d-none');
-  document.getElementById('amazonResults').classList.add('d-none');
+  const elements = ['ebayResults', 'amazonResults', 'historicalData'];
+  elements.forEach(id => {
+    const element = document.getElementById(id);
+    if (element) element.style.display = 'none';
+  });
+}
+
+// Authentication helper functions
+function getAuthHeaders() {
+  const token = localStorage.getItem('token');
+  return {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  };
+}
+
+function isAuthenticated() {
+  const token = localStorage.getItem('token');
+  const refreshToken = localStorage.getItem('refreshToken');
+  return !!(token && refreshToken);
+}
+
+async function refreshAuthToken() {
+  try {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken) {
+      throw new Error('No refresh token available');
+    }
+
+    const response = await fetch('/api/refresh-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken })
+    });
+
+    const data = await response.json();
+    if (data.success) {
+      localStorage.setItem('token', data.token);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Error refreshing token:', error);
+    return false;
+  }
+}
+
+async function handleAuthError(response) {
+  if (response.status === 401 || response.status === 403) {
+    const success = await refreshAuthToken();
+    if (!success) {
+      localStorage.clear();
+      window.location.href = '/login.html';
+      return null;
+    }
+    return true;
+  }
+  return false;
+}
+
+// Update the checkLoginStatus function
+async function checkLoginStatus() {
+  if (!isAuthenticated()) {
+    window.location.href = '/login.html';
+    return false;
+  }
+
+  try {
+    const response = await fetch('/api/protected', {
+      headers: getAuthHeaders()
+    });
+
+    if (await handleAuthError(response)) {
+      return checkLoginStatus();
+    }
+
+    const data = await response.json();
+    if (data.user) {
+      // Update UI with user info
+      const userInfo = document.getElementById('userInfo');
+      if (userInfo) {
+        userInfo.innerHTML = `
+          <span class="text-white">Welcome, ${data.user.firstName || data.user.username}</span>
+        `;
+      }
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Error checking login status:', error);
+    return false;
+  }
+}
+
+// Update the logout handler
+document.getElementById('logoutBtn').addEventListener('click', async function() {
+  try {
+    const response = await fetch('/api/logout', {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+
+    const data = await response.json();
+    if (data.success) {
+      localStorage.clear();
+      window.location.href = '/login.html';
+    } else {
+      console.error('Logout failed:', data.error);
+      alert('Failed to logout. Please try again.');
+    }
+  } catch (error) {
+    console.error('Error during logout:', error);
+    localStorage.clear();
+    window.location.href = '/login.html';
+  }
+});
+
+// Add authentication to API calls
+async function makeAuthenticatedRequest(url, options = {}) {
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        ...getAuthHeaders()
+      }
+    });
+
+    if (await handleAuthError(response)) {
+      return makeAuthenticatedRequest(url, options);
+    }
+
+    return response;
+  } catch (error) {
+    console.error('Request error:', error);
+    throw error;
+  }
 }
 
 // -------------------------
@@ -25,67 +159,150 @@ function hideResults() {
 document.addEventListener('DOMContentLoaded', function() {
   console.log('DOM Content Loaded');
     
-  const ebaySearchBtn = document.getElementById('ebaySearchBtn');
-  if (!ebaySearchBtn) {
-    console.error('ebaySearchBtn not found in DOM');
-    return;
-  }
+  // Initialize tooltips
+  const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+  tooltipTriggerList.map(function (tooltipTriggerEl) {
+    return new bootstrap.Tooltip(tooltipTriggerEl);
+  });
 
-  ebaySearchBtn.addEventListener('click', async function() {
-    console.log('Search button clicked');
-    const query = document.getElementById('itemQuery').value;
-    console.log('Search query:', query);
-
-    if (!query) {
-      console.warn('Empty query - aborting search');
-      return;
-    }
-
-    const loadingSpinner = document.getElementById('loadingSpinner');
-    if (!loadingSpinner) {
-      console.error('Loading spinner element not found');
-    }
-    loadingSpinner.classList.remove('d-none');
-    
-    try {
-      console.log('Fetching data from API...');
-      const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-      console.log('API Response status:', response.status);
+  // Search button click handler
+  const searchBtn = document.getElementById('ebaySearchBtn');
+  if (searchBtn) {
+    searchBtn.addEventListener('click', async function() {
+      console.log('Search button clicked');
+      const query = getQuery();
+      console.log('Search query:', query);
       
-      const data = await response.json();
-      console.log('API Response data:', data);
-
-      if (data.error) {
-        console.error('API returned error:', data.error);
-        alert(data.error);
+      if (!query) {
+        alert('Please enter an item name.');
         return;
       }
 
-      // Display current results
-      console.log('Displaying eBay results');
-      displayEbayResults(data);
+      hideResults();
+      toggleSpinner(true);
+      console.log('Fetching data from API...');
 
-      // Get historical data
-      console.log('Fetching historical data...');
-      const historyResponse = await fetch(`/api/historical-data?q=${encodeURIComponent(query)}`);
-      console.log('Historical data response status:', historyResponse.status);
-      
-      const historyData = await historyResponse.json();
-      console.log('Historical data:', historyData);
-      
-      // Display historical data
-      console.log('Displaying historical data');
-      displayHistoricalData(historyData);
+      try {
+        const response = await fetch('/api/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ query })
+        });
 
-    } catch (error) {
-      console.error('Error during search:', error);
-      console.error('Error stack:', error.stack);
-      alert('Error fetching data. Check the console for details.');
-    } finally {
-      console.log('Search operation completed');
-      loadingSpinner.classList.add('d-none');
-    }
+        console.log('API Response status:', response.status);
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        displayEbayResults(data);
+        loadHistoricalData(query);
+
+      } catch (error) {
+        console.log('Error during search:', error);
+        console.log('Error stack:', error.stack);
+        alert('An error occurred while searching. Please try again.');
+      } finally {
+        toggleSpinner(false);
+        console.log('Search operation completed');
+      }
+    });
+  }
+
+  // Amazon search button click handler
+  const amazonSearchBtn = document.getElementById('amazonSearchBtn');
+  if (amazonSearchBtn) {
+    amazonSearchBtn.addEventListener('click', async function() {
+      const query = getQuery();
+      if (!query) {
+        alert('Please enter an item name.');
+        return;
+      }
+
+      hideResults();
+      toggleSpinner(true);
+
+      try {
+        const response = await fetch('/api/search/amazon', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ query })
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        displayAmazonResults(data);
+
+      } catch (error) {
+        console.error('Error during Amazon search:', error);
+        alert('An error occurred while searching Amazon. Please try again.');
+      } finally {
+        toggleSpinner(false);
+      }
+    });
+  }
+
+  // Helper functions
+  function getQuery() {
+    const searchInput = document.getElementById('itemQuery');
+    return searchInput ? searchInput.value.trim() : '';
+  }
+
+  function toggleSpinner(show) {
+    const spinner = document.getElementById('loadingSpinner');
+    const results = document.getElementById('results');
+    if (spinner) spinner.style.display = show ? 'block' : 'none';
+    if (results) results.style.display = show ? 'none' : 'block';
+  }
+
+  function hideResults() {
+    const elements = ['ebayResults', 'amazonResults', 'historicalData'];
+    elements.forEach(id => {
+      const element = document.getElementById(id);
+      if (element) element.style.display = 'none';
+    });
+  }
+
+  // Load historical data
+  const historicalData = document.getElementById('historicalData');
+  if (historicalData) {
+    historicalData.addEventListener('click', function() {
+      const query = getQuery();
+      if (query) {
+        loadHistoricalData(query);
+      }
+    });
+  }
+
+  // Load wishlist when page loads
+  loadWishlist();
+
+  // Initialize all tooltips
+  const tooltips = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+  tooltips.forEach(tooltip => new bootstrap.Tooltip(tooltip));
+
+  initParticles();
+  
+  // Initialize counters when elements become visible
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting && !entry.target.dataset.counted) {
+        const value = parseInt(entry.target.textContent);
+        animateValue(entry.target, 0, value, 1500);
+        entry.target.dataset.counted = true;
+      }
+    });
   });
+
+  document.querySelectorAll('.fs-4.fw-bold').forEach(el => observer.observe(el));
 });
 
 function displayEbayResults(data) {
@@ -98,21 +315,7 @@ function displayEbayResults(data) {
   }
   
   try {
-    // Update price alert elements
-    const currentPrice = data.aggregates.avgPrice;
-    console.log('Current average price:', currentPrice);
-    
-    const alertPriceElement = document.getElementById('alertPrice');
-    const currentPriceElement = document.getElementById('currentPrice');
-    
-    if (!alertPriceElement || !currentPriceElement) {
-      console.error('Price alert elements not found');
-    } else {
-      alertPriceElement.textContent = `$${currentPrice.toFixed(2)}`;
-      currentPriceElement.dataset.price = currentPrice;
-    }
-
-    // Update results display
+    // Show the results section
     const ebayResults = document.getElementById('ebayResults');
     if (!ebayResults) {
       console.error('ebayResults element not found');
@@ -121,7 +324,7 @@ function displayEbayResults(data) {
 
     ebayResults.classList.remove('d-none');
     
-    // Update prices
+    // Update prices using stats from the response
     const elements = {
       avgPrice: document.getElementById('avgPrice'),
       highPrice: document.getElementById('highPrice'),
@@ -136,55 +339,52 @@ function displayEbayResults(data) {
       }
     });
 
+    const stats = data.stats;
     // Update values if elements exist
-    if (elements.avgPrice) elements.avgPrice.textContent = `$${data.aggregates.avgPrice}`;
-    if (elements.highPrice) elements.highPrice.textContent = `$${data.aggregates.highPrice}`;
-    if (elements.lowPrice) elements.lowPrice.textContent = `$${data.aggregates.lowPrice}`;
-    if (elements.totalSales) elements.totalSales.textContent = data.aggregates.totalSales;
+    if (elements.avgPrice) elements.avgPrice.textContent = `$${stats.avgPrice.toFixed(2)}`;
+    if (elements.highPrice) elements.highPrice.textContent = `$${stats.highPrice.toFixed(2)}`;
+    if (elements.lowPrice) elements.lowPrice.textContent = `$${stats.lowPrice.toFixed(2)}`;
+    if (elements.totalSales) elements.totalSales.textContent = stats.totalItems;
 
-    const ctx = document.getElementById('salesChart').getContext('2d');
-    const chartData = data.aggregates.salesOverTime;
-
-    if (window.salesChartInstance) {
-      window.salesChartInstance.destroy();
+    // Update price alert elements if they exist
+    const alertPriceElement = document.getElementById('alertPrice');
+    const currentPriceElement = document.getElementById('currentPrice');
+    
+    if (alertPriceElement && currentPriceElement) {
+      alertPriceElement.textContent = `$${stats.avgPrice.toFixed(2)}`;
+      currentPriceElement.dataset.price = stats.avgPrice;
     }
 
-    window.salesChartInstance = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: chartData.dates,
-        datasets: [{
-          label: 'Daily Sales Count',
-          data: chartData.counts,
-          backgroundColor: 'rgba(54, 162, 235, 0.2)',
-          borderColor: 'rgba(54, 162, 235, 1)',
-          borderWidth: 2,
-          fill: true
-        }]
-      },
-      options: {
-        scales: {
-          y: {
-            beginAtZero: true,
-            ticks: { precision: 0 }
-          }
-        }
+    // Display the first item's image if available
+    const itemImage = document.getElementById('ebayItemImage');
+    if (itemImage) {
+      if (data.items && data.items.length > 0 && data.items[0].image) {
+        itemImage.src = data.items[0].image;
+      } else {
+        itemImage.src = 'default-image.png';
       }
-    });
+    }
 
-    // NEW: Display the list of sold items with title and link.
+    // Display items list
     const itemListContainer = document.getElementById('ebayItemList');
-    const listGroup = itemListContainer.querySelector('ul');
-    listGroup.innerHTML = '';
-    data.items.forEach(item => {
-      const listItem = document.createElement('li');
-      listItem.className = 'list-group-item';
-      listItem.innerHTML = `<a href="${item.link}" target="_blank">${item.title}</a> - $${item.soldPrice}`;
-      listGroup.appendChild(listItem);
-    });
-
-    // New: Display item image
-    document.getElementById('ebayItemImage').src = data.itemImage;
+    if (itemListContainer) {
+      const listGroup = itemListContainer.querySelector('ul');
+      if (listGroup) {
+        listGroup.innerHTML = '';
+        data.items.forEach(item => {
+          const listItem = document.createElement('li');
+          listItem.className = 'list-group-item d-flex justify-content-between align-items-center';
+          listItem.innerHTML = `
+            <div>
+              <a href="${item.link}" target="_blank" class="text-decoration-none">${item.title}</a>
+              <small class="text-muted d-block">${item.soldDateText || new Date(item.soldDate).toLocaleDateString()}</small>
+            </div>
+            <span class="badge bg-primary rounded-pill">$${item.soldPrice.toFixed(2)}</span>
+          `;
+          listGroup.appendChild(listItem);
+        });
+      }
+    }
 
     console.log('Successfully displayed eBay results');
   } catch (error) {
@@ -196,12 +396,12 @@ function displayEbayResults(data) {
 function displayHistoricalData(data) {
   console.group('Historical Data Debug');
   console.log('Full data received:', data);
-  console.log('eBay Records:', data.ebayHistory.length);
+  console.log('eBay Records:', data.data.length);
   
   // Update debug badges if they exist
   const ebayDebugBadge = document.getElementById('ebayHistoryDebug');
   if (ebayDebugBadge) {
-    ebayDebugBadge.textContent = `Records: ${data.ebayHistory.length}`;
+    ebayDebugBadge.textContent = `Records: ${data.data.length}`;
   }
 
   // Clear existing table content
@@ -213,7 +413,7 @@ function displayHistoricalData(data) {
   ebayTableBody.innerHTML = '';
 
   // Display eBay historical data
-  data.ebayHistory.forEach(record => {
+  data.data.forEach(record => {
     console.log('Processing eBay record:', record);
     const row = document.createElement('tr');
     row.innerHTML = `
@@ -233,9 +433,9 @@ function displayHistoricalData(data) {
     new Chart(ctx, {
       type: 'line',
       data: {
-        labels: data.ebayHistory.slice(-7).map(h => new Date(h.timestamp).toLocaleDateString()),
+        labels: data.data.slice(-7).map(h => new Date(h.timestamp).toLocaleDateString()),
         datasets: [{
-          data: data.ebayHistory.slice(-7).map(h => h.avg_price),
+          data: data.data.slice(-7).map(h => h.avg_price),
           borderColor: '#007bff',
           borderWidth: 1,
           fill: false,
@@ -257,28 +457,6 @@ function displayHistoricalData(data) {
 // -------------------------
 // Amazon Search and Display
 // -------------------------
-document.getElementById('amazonSearchBtn').addEventListener('click', function () {
-  const query = getQuery();
-  if (!query) {
-    alert('Please enter an item name.');
-    return;
-  }
-  hideResults();
-  toggleSpinner(true);
-  fetch(`/api/search/amazon?q=${encodeURIComponent(query)}`)
-    .then(response => response.json())
-    .then(data => {
-      toggleSpinner(false);
-      displayAmazonResults(data);
-      loadHistoricalData(query);
-    })
-    .catch(error => {
-      toggleSpinner(false);
-      console.error('Error:', error);
-      alert('Error fetching Amazon data. Check the console for details.');
-    });
-});
-
 function displayAmazonResults(data) {
   if (data.error) {
     alert(data.error);
@@ -435,14 +613,6 @@ function removeFromWishlist(id) {
   });
 }
 
-// Check if user is logged in
-function checkLoginStatus() {
-  const token = localStorage.getItem('token');
-  if (token) {
-    document.getElementById('loginOptionsSection').classList.add('d-none');
-  }
-}
-
 // Initialize particle background
 function initParticles() {
   const background = document.createElement('div');
@@ -474,50 +644,10 @@ function animateValue(element, start, end, duration) {
   }, 16);
 }
 
-// Add event listeners
-document.addEventListener('DOMContentLoaded', function() {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    window.location.href = '/login.html';
-    return;
-  }
-
-  checkLoginStatus();
-
-  document.getElementById('wishlistForm').addEventListener('submit', addToWishlist);
-
-  document.getElementById('logoutBtn').addEventListener('click', function() {
-    localStorage.removeItem('token');
-    window.location.href = '/login.html';
-  });
-
-  // Load wishlist when page loads
-  loadWishlist();
-
-  // Initialize all tooltips
-  const tooltips = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-  tooltips.forEach(tooltip => new bootstrap.Tooltip(tooltip));
-
-  initParticles();
-  
-  // Initialize counters when elements become visible
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting && !entry.target.dataset.counted) {
-        const value = parseInt(entry.target.textContent);
-        animateValue(entry.target, 0, value, 1500);
-        entry.target.dataset.counted = true;
-      }
-    });
-  });
-
-  document.querySelectorAll('.fs-4.fw-bold').forEach(el => observer.observe(el));
-});
-
 function loadHistoricalData(query) {
   console.log('Requesting historical data for:', query);
   
-  fetch(`/api/historical-data?q=${encodeURIComponent(query)}`)
+  fetch(`/api/history/${encodeURIComponent(query)}`)
     .then(response => {
       console.log('Historical data response status:', response.status);
       return response.json();
@@ -525,12 +655,12 @@ function loadHistoricalData(query) {
     .then(data => {
       console.log('Historical data received:', data);
       
-      if (data.error) {
+      if (!data.success) {
         console.error('Error in historical data:', data.error);
         return;
       }
       
-      if (!data.ebayHistory.length) {
+      if (!data.data || !data.data.length) {
         console.log('No historical data available yet');
         return;
       }
