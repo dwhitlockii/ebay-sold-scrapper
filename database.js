@@ -4,6 +4,7 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { logger } = require('./utils/logger');
 
 // Ensure the data directory exists
 const dataDir = path.join(__dirname, 'data');
@@ -66,7 +67,15 @@ function initDatabase() {
       CREATE TABLE IF NOT EXISTS searches (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         query TEXT NOT NULL,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        avg_price REAL,
+        high_price REAL,
+        low_price REAL,
+        total_sales INTEGER,
+        status TEXT DEFAULT 'pending',
+        error TEXT,
+        user_id INTEGER,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
 
       CREATE TABLE IF NOT EXISTS ebay_prices (
@@ -96,6 +105,17 @@ function initDatabase() {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       );
+
+      CREATE TABLE IF NOT EXISTS search_results (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        search_id INTEGER,
+        title TEXT NOT NULL,
+        price REAL NOT NULL,
+        link TEXT,
+        image_url TEXT,
+        sold_date TEXT,
+        FOREIGN KEY (search_id) REFERENCES searches (id)
+      );
     `);
 
     // Create indexes if they don't exist
@@ -108,11 +128,12 @@ function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_searches_query ON searches(query);
       CREATE INDEX IF NOT EXISTS idx_ebay_prices_search_id ON ebay_prices(search_id);
       CREATE INDEX IF NOT EXISTS idx_price_alerts_user_id ON price_alerts(user_id);
+      CREATE INDEX IF NOT EXISTS idx_search_results_search_id ON search_results(search_id);
     `);
 
-    console.log('Database initialized successfully');
+    logger.info('Database initialized successfully');
   } catch (error) {
-    console.error('Error initializing database:', error);
+    logger.error('Error initializing database:', error);
     throw error;
   }
 }
@@ -256,45 +277,33 @@ function setResetPasswordToken(email) {
 
 // Save eBay search results
 function saveEbayResults(query, data) {
-  try {
-    // Check if we have a recent search (within last 5 minutes) for this query
-    const checkRecent = db.prepare(`
-      SELECT id FROM searches s
-      JOIN ebay_prices e ON e.search_id = s.id
-      WHERE s.query = ? 
-      AND datetime(e.timestamp) > datetime('now', '-5 minutes')
-      ORDER BY e.timestamp DESC
-      LIMIT 1
+  const { aggregates } = data;
+  
+  // Start a transaction
+  const transaction = db.transaction((query, aggregates) => {
+    // Insert search record
+    const searchStmt = db.prepare(`
+      INSERT INTO searches (query, avg_price, high_price, low_price, total_sales)
+      VALUES (?, ?, ?, ?, ?)
     `);
     
-    const recentSearch = checkRecent.get(query);
-    if (recentSearch) {
-      console.log('Recent search found, skipping save');
-      return recentSearch.id;
-    }
-    
-    const searchInsert = db.prepare('INSERT INTO searches (query) VALUES (?)');
-    const searchResult = searchInsert.run(query);
-    const searchId = searchResult.lastInsertRowid;
-    
-    const ebayInsert = db.prepare(`
-      INSERT INTO ebay_prices (
-        search_id, avg_price, high_price, low_price, total_sales, timestamp
-      ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `);
-    
-    ebayInsert.run(
-      searchId,
-      data.aggregates.avgPrice,
-      data.aggregates.highPrice,
-      data.aggregates.lowPrice,
-      data.aggregates.totalSales
+    const result = searchStmt.run(
+      query,
+      aggregates.avgPrice,
+      aggregates.highPrice,
+      aggregates.lowPrice,
+      aggregates.totalSales
     );
     
-    console.log('eBay results saved successfully');
+    return result.lastInsertRowid;
+  });
+
+  try {
+    const searchId = transaction(query, aggregates);
+    logger.info('Search results saved successfully', { searchId });
     return searchId;
   } catch (error) {
-    console.error('Error saving eBay results:', error);
+    logger.error('Error saving search results:', error);
     throw error;
   }
 }
@@ -306,7 +315,7 @@ function addToWishlist(productName, targetPrice) {
     const result = stmt.run(productName, targetPrice);
     return result.lastInsertRowid;
   } catch (error) {
-    console.error('Error adding to wishlist:', error);
+    logger.error('Error adding to wishlist:', error);
     throw error;
   }
 }
@@ -316,7 +325,7 @@ function getWishlist() {
     const stmt = db.prepare('SELECT * FROM wishlist ORDER BY created_at DESC');
     return stmt.all();
   } catch (error) {
-    console.error('Error getting wishlist:', error);
+    logger.error('Error getting wishlist:', error);
     throw error;
   }
 }
@@ -326,7 +335,7 @@ function removeFromWishlist(id) {
     const stmt = db.prepare('DELETE FROM wishlist WHERE id = ?');
     return stmt.run(id);
   } catch (error) {
-    console.error('Error removing from wishlist:', error);
+    logger.error('Error removing from wishlist:', error);
     throw error;
   }
 }
@@ -339,33 +348,41 @@ function createPriceAlert(userId, productName, targetPrice) {
     const result = stmt.run(userId, productName, targetPrice);
     return result.lastInsertRowid;
   } catch (error) {
-    console.error('Error creating price alert:', error);
+    logger.error('Error creating price alert:', error);
     throw error;
   }
 }
 
-function getEbayHistory(query) {
+function getEbayHistory(query = '') {
   try {
-    console.log('Executing eBay history query for:', query);
-    const stmt = db.prepare(`
-      SELECT ebay_prices.timestamp, 
-             ebay_prices.avg_price, 
-             ebay_prices.high_price, 
-             ebay_prices.low_price, 
-             ebay_prices.total_sales
-      FROM ebay_prices
-      JOIN searches ON ebay_prices.search_id = searches.id
-      WHERE searches.query = ?
-      ORDER BY ebay_prices.timestamp DESC
-    `);
+    let sql = `
+      SELECT id, query, timestamp, avg_price, high_price, low_price, total_sales
+      FROM searches
+    `;
     
-    console.log('SQL Query:', stmt.source);
-    const results = stmt.all(query);
-    console.log('Query results:', results);
-    return results;
+    const params = [];
+    if (query) {
+      sql += ' WHERE query LIKE ?';
+      params.push(`%${query}%`);
+    }
+    
+    sql += ' ORDER BY timestamp DESC LIMIT 50';
+    
+    const stmt = db.prepare(sql);
+    return stmt.all(...params);
   } catch (error) {
-    console.error('Error in getEbayHistory:', error.message);
-    console.error('Stack:', error.stack);
+    logger.error('Error fetching search history:', error);
+    throw error;
+  }
+}
+
+// Execute a SQL query and return all results
+function all(sql, params = []) {
+  try {
+    const stmt = db.prepare(sql);
+    return stmt.all(...params);
+  } catch (error) {
+    logger.error('Database query error:', error);
     throw error;
   }
 }
@@ -395,5 +412,6 @@ module.exports = {
   getWishlist,
   removeFromWishlist,
   createPriceAlert,
-  getEbayHistory
+  getEbayHistory,
+  all
 };

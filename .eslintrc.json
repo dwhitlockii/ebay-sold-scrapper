@@ -1,0 +1,41 @@
+{
+    "env": {
+        "node": true,
+        "es2021": true,
+        "jest": true
+    },
+    "extends": [
+        "eslint:recommended",
+        "plugin:node/recommended",
+        "plugin:jest/recommended",
+        "prettier"
+    ],
+    "parserOptions": {
+        "ecmaVersion": 2021
+    },
+    "plugins": [
+        "node",
+        "jest"
+    ],
+    "rules": {
+        "no-console": "warn",
+        "no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+        "node/no-unsupported-features/es-syntax": ["error", {
+            "version": ">=14.0.0",
+            "ignores": []
+        }],
+        "node/no-missing-require": ["error", {
+            "allowModules": [],
+            "resolvePaths": ["."],
+            "tryExtensions": [".js", ".json", ".node"]
+        }],
+        "node/no-unpublished-require": ["error", {
+            "allowModules": ["supertest"]
+        }],
+        "jest/no-disabled-tests": "warn",
+        "jest/no-focused-tests": "error",
+        "jest/no-identical-title": "error",
+        "jest/prefer-to-have-length": "warn",
+        "jest/valid-expect": "error"
+    }
+} 

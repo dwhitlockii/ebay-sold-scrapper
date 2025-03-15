@@ -1,70 +1,30 @@
-# eBay Sold Items Price Tracker
+# eBay Sold Items Scraper
 
-A powerful web application that tracks and analyzes eBay sold item prices, providing historical data analysis and price alerts.
+A Node.js application that tracks and analyzes eBay sold items data, providing insights into pricing trends and market values.
 
 ## Features
 
-- **eBay Price Analysis**
-  - Search sold item listings with real-time results
-  - View comprehensive price statistics:
-    - Average price
-    - Highest price
-    - Lowest price
-    - Total sales volume
-  - Interactive price history charts with sparklines
-  - Detailed sold item listings with direct eBay links
-  - Product images with fallback support
+- Search and track eBay sold items
+- User authentication and authorization
+- Wishlist management
+- Price alerts
+- Historical price tracking
+- Rate limiting and security measures
+- Caching for improved performance
+- Comprehensive logging and monitoring
 
-- **Historical Data Tracking**
-  - Automated price tracking over time
-  - Trend visualization with sparkline charts
-  - Price movement indicators
-  - Detailed historical records with:
-    - Date-wise price aggregation
-    - Sales volume tracking
-    - High/low price points
+## Prerequisites
 
-- **User Features**
-  - User authentication with multiple options:
-    - Email/password registration
-    - Google login
-    - Apple login
-    - Facebook login
-  - Personalized wishlist management
-  - Price alert system with email notifications
-  - User reviews and ratings
-
-- **Advanced Features**
-  - Rate limiting for API protection
-  - Proxy support with rotation
-  - Caching system for improved performance
-  - Responsive design for all devices
-  - Real-time price alerts
-  - Duplicate entry prevention
-
-## Technical Stack
-
-- **Frontend**
-  - HTML5/CSS3/JavaScript
-  - Bootstrap 5 for responsive design
-  - Font Awesome icons
-  - Chart.js for data visualization
-  - Custom animations and transitions
-
-- **Backend**
-  - Node.js with Express
-  - SQLite3 for data persistence
-  - Better-SQLite3 for improved performance
-  - JWT for authentication
-  - Cheerio for web scraping
-  - Winston for logging
+- Node.js (v18 or higher)
+- npm (v9 or higher)
+- SQLite3
 
 ## Installation
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/ebay-sold-scrapper.git
-   cd ebay-sold-scrapper
+   git clone https://github.com/yourusername/ebay-sold-scraper.git
+   cd ebay-sold-scraper
    ```
 
 2. Install dependencies:
@@ -72,79 +32,102 @@ A powerful web application that tracks and analyzes eBay sold item prices, provi
    npm install
    ```
 
-3. Create a `.env` file with required environment variables:
-   ```env
-   PORT=3001
-   JWT_SECRET=your_jwt_secret
-   REFRESH_SECRET=your_refresh_secret
-   EMAIL_SERVICE_API_KEY=your_email_api_key
+3. Create a `.env` file in the root directory with the following variables:
    ```
-
-4. Initialize the database:
-   ```bash
-   node database.js
-   ```
-
-5. Start the development server:
-   ```bash
-   npm run dev
+   PORT=3000
+   NODE_ENV=development
+   SESSION_SECRET=your_session_secret
+   EBAY_APP_ID=your_ebay_app_id
+   EBAY_CERT_ID=your_ebay_cert_id
+   EBAY_DEV_ID=your_ebay_dev_id
+   RATE_LIMIT_WINDOW=15
+   RATE_LIMIT_MAX_REQUESTS=100
    ```
 
 ## Usage
 
-1. Access the application at `http://localhost:3001`
-2. Create an account or log in
-3. Enter a product name in the search bar
-4. View real-time price analysis and historical data
-5. Set up price alerts for tracked items
-6. Add items to your wishlist for easy tracking
+1. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+2. Start the production server:
+   ```bash
+   npm start
+   ```
 
 ## API Endpoints
 
-- **Search**
-  - `POST /api/search` - Search for eBay sold items
-  - `GET /api/history/:query` - Get historical price data
+### Authentication
+- `POST /auth/register` - Register a new user
+- `POST /auth/login` - Login user
+- `POST /auth/logout` - Logout user
+- `POST /auth/refresh` - Refresh access token
 
-- **Authentication**
-  - `POST /api/auth/register` - Register new user
-  - `POST /api/auth/login` - User login
-  - `POST /api/auth/refresh` - Refresh access token
+### Search
+- `GET /search` - Search for sold items
+- `GET /search/history` - Get user's search history
+- `GET /search/stats` - Get search statistics
 
-- **Wishlist**
-  - `GET /api/wishlist` - Get user's wishlist
-  - `POST /api/wishlist` - Add item to wishlist
-  - `DELETE /api/wishlist/:id` - Remove item from wishlist
+### Wishlist
+- `GET /wishlist` - Get user's wishlist
+- `POST /wishlist` - Add item to wishlist
+- `DELETE /wishlist/:id` - Remove item from wishlist
+- `PUT /wishlist/:id` - Update wishlist item
 
-- **Price Alerts**
-  - `POST /api/price-alerts` - Create price alert
-  - `GET /api/price-alerts` - Get user's price alerts
+### Price Alerts
+- `GET /alerts` - Get user's price alerts
+- `POST /alerts` - Create new price alert
+- `DELETE /alerts/:id` - Delete price alert
+- `PUT /alerts/:id` - Update price alert
 
 ## Security Features
 
-- JWT-based authentication
-- Rate limiting protection
+- CORS protection
+- Helmet security headers
+- Rate limiting
+- Input sanitization
 - SQL injection prevention
-- XSS protection
-- CORS configuration
-- Secure password hashing
+- Session management
+- Token blacklisting
+
+## Development
+
+### Scripts
+- `npm run dev` - Start development server with hot reload
+- `npm test` - Run tests
+- `npm run lint` - Run ESLint
+- `npm run format` - Format code with Prettier
+
+### Project Structure
+```
+├── config/
+├── controllers/
+├── middleware/
+├── models/
+├── routes/
+├── services/
+├── utils/
+├── tests/
+└── server.js
+```
 
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
-3. Commit changes: `git commit -am 'Add feature'`
-4. Push to branch: `git push origin feature-name`
-5. Submit a Pull Request
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
-- eBay for product data
-- Bootstrap team for UI components
-- Chart.js for visualization tools
-- Open source community for various tools and libraries
+- eBay API Documentation
+- Node.js community
+- Express.js team
 
 

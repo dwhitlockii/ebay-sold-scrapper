@@ -2,243 +2,217 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const cheerio = require('cheerio');
-const { rateLimiter } = require('../middleware/rateLimiter');
+const { body, validationResult } = require('express-validator');
 const { logger } = require('../utils/logger');
-const { db } = require('../database');
+const db = require('../database');
+const { authenticateToken } = require('../middleware/auth');
+const { searchEbay, parseEbayResults } = require('../services/ebay');
+const { cache } = require('../utils/cache');
+const { handleError } = require('../utils/errorHandler');
 
-// Array of rotating user agents
-const userAgents = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/92.0.902.73',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Safari/605.1.15'
+// Validation middleware
+const validateSearch = [
+    body('query').trim().notEmpty().withMessage('Search query is required')
+        .isLength({ min: 2, max: 100 }).withMessage('Search query must be between 2 and 100 characters')
+        .escape(),
+    (req, res, next) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+        next();
+    }
 ];
 
-// Search endpoint
-router.post('/', rateLimiter, async (req, res) => {
-    const query = req.body.query;
-    
-    logger.debug('Search request received', { query });
-
-    if (!query) {
-        logger.warn('Search request missing query parameter');
-        return res.status(400).json({ error: 'Query is required' });
-    }
-
+// Search eBay sold items
+router.post('/', validateSearch, async (req, res) => {
     try {
-        // Construct eBay URL
+        const { query } = req.body;
+        logger.info('Processing search request', { query });
+
+        // Create the eBay URL for sold items
         const ebayUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(query)}&LH_Sold=1&LH_Complete=1`;
-        logger.debug('Constructed eBay URL', { url: ebayUrl });
 
-        // Get a random user agent
-        const userAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
-        logger.debug('Selected user agent', { userAgent });
-
-        // Make request to eBay
-        logger.debug('Making request to eBay');
+        // Fetch the eBay page
         const response = await axios.get(ebayUrl, {
             headers: {
-                'User-Agent': userAgent
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
         });
 
-        logger.debug('Received response from eBay', {
-            status: response.status,
-            contentLength: response.data.length
-        });
-
-        // Parse HTML with cheerio
-        logger.debug('Parsing HTML response');
         const $ = cheerio.load(response.data);
         const items = [];
-        let validItemCount = 0;
 
-        // Find all search result items
-        $('.s-item').each((i, element) => {
+        // Extract sold items data
+        $('.s-item').each((i, el) => {
             // Skip the first element as it's usually a template
             if (i === 0) return;
 
-            try {
-                const title = $(element).find('.s-item__title').text().trim();
-                const priceText = $(element).find('.s-item__price').text().trim();
-                const soldDateText = $(element).find('.s-item__title--tag').text().trim();
-                const condition = $(element).find('.SECONDARY_INFO').text().trim();
-                const link = $(element).find('a.s-item__link').attr('href');
-                const imageUrl = $(element).find('.s-item__image-img').attr('src');
+            const $item = $(el);
+            const title = $item.find('.s-item__title').text().trim();
+            const priceText = $item.find('.s-item__price').text().trim();
+            const price = parseFloat(priceText.replace(/[^0-9.]/g, ''));
+            const link = $item.find('.s-item__link').attr('href');
+            const imageUrl = $item.find('.s-item__image-img').attr('src');
+            const soldDate = $item.find('.s-item__title--tag').text().trim();
 
-                // Extract the numeric price
-                const price = parseFloat(priceText.replace(/[^0-9.]/g, ''));
-
-                // Parse the sold date
-                const soldDate = new Date();
-                if (soldDateText.includes('Sold')) {
-                    const dateMatch = soldDateText.match(/Sold\s+([A-Za-z]+)\s+(\d+)/);
-                    if (dateMatch) {
-                        const month = dateMatch[1];
-                        const day = parseInt(dateMatch[2]);
-                        soldDate.setMonth(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(month));
-                        soldDate.setDate(day);
-                    }
-                }
-
-                // Only add items with valid prices
-                if (!isNaN(price)) {
-                    validItemCount++;
-                    logger.debug('Found valid item', {
-                        itemNumber: validItemCount,
-                        title: title.substring(0, 50),
-                        price,
-                        soldDate: soldDate.toISOString()
-                    });
-
-                    items.push({
-                        title,
-                        link,
-                        image: imageUrl,
-                        soldPrice: price,
-                        soldDate,
-                        condition,
-                        soldDateText
-                    });
-                }
-            } catch (error) {
-                logger.warn('Error parsing item', {
-                    itemIndex: i,
-                    error: error.message
+            if (!isNaN(price) && title && link) {
+                items.push({
+                    title,
+                    price,
+                    link,
+                    imageUrl,
+                    soldDate
                 });
             }
         });
 
-        // If no items were found
         if (items.length === 0) {
-            logger.warn('No items found for query', { query });
             return res.status(404).json({
-                error: "No sold items found for your search query."
+                success: false,
+                error: 'No sold items found for this search query'
             });
         }
 
         // Calculate statistics
-        logger.debug('Calculating statistics');
-        const prices = items.map(item => item.soldPrice);
-        const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
-        const highPrice = Math.max(...prices);
-        const lowPrice = Math.min(...prices);
+        const prices = items.map(item => item.price);
+        const stats = {
+            count: items.length,
+            average: prices.reduce((a, b) => a + b, 0) / prices.length,
+            min: Math.min(...prices),
+            max: Math.max(...prices),
+            median: prices.sort((a, b) => a - b)[Math.floor(prices.length / 2)]
+        };
 
-        // Save results to database
-        logger.debug('Saving results to database', {
-            itemCount: items.length,
-            avgPrice,
-            highPrice,
-            lowPrice
+        // Save search results to database
+        const searchId = await db.saveEbayResults(query, {
+            aggregates: {
+                avgPrice: stats.average,
+                highPrice: stats.max,
+                lowPrice: stats.min,
+                totalSales: stats.count
+            }
         });
-
-        const searchInsert = db.prepare('INSERT INTO searches (query) VALUES (?)');
-        const searchResult = searchInsert.run(query);
-        const searchId = searchResult.lastInsertRowid;
-
-        const ebayInsert = db.prepare(`
-            INSERT INTO ebay_prices (
-                search_id, avg_price, high_price, low_price, total_sales
-            ) VALUES (?, ?, ?, ?, ?)
-        `);
-
-        ebayInsert.run(
-            searchId,
-            avgPrice,
-            highPrice,
-            lowPrice,
-            items.length
-        );
 
         logger.info('Search completed successfully', {
             query,
             itemsFound: items.length,
-            avgPrice: avgPrice.toFixed(2),
             searchId
         });
 
-        // Return results
         res.json({
             success: true,
+            searchId,
             items,
-            stats: {
-                totalItems: items.length,
-                avgPrice,
-                highPrice,
-                lowPrice
-            }
+            stats
         });
 
     } catch (error) {
-        logger.error('Search error', {
-            query,
-            error: error.message,
-            stack: error.stack
-        });
-
-        res.status(500).json({
-            success: false,
-            error: 'An error occurred while searching. Please try again.'
-        });
+        logger.error('Search error:', error);
+        handleError(error, res);
     }
 });
 
-// Historical data endpoint
-router.get('/history/:query', rateLimiter, async (req, res) => {
-    const query = req.params.query;
-    
-    logger.debug('Historical data request received', { query });
-
+// Get search history
+router.get('/history/:query?', async (req, res) => {
     try {
-        logger.debug('Querying database for historical data');
-        const results = db.prepare(`
-            SELECT 
-                ebay_prices.timestamp, 
-                ebay_prices.avg_price, 
-                ebay_prices.high_price, 
-                ebay_prices.low_price, 
-                ebay_prices.total_sales
-            FROM ebay_prices
-            JOIN searches ON ebay_prices.search_id = searches.id
-            WHERE searches.query = ?
-            ORDER BY ebay_prices.timestamp DESC
-        `).all(query);
-
-        logger.debug('Historical data retrieved', {
-            query,
-            recordCount: results.length
+        // Get query from either path parameter or query parameter
+        const query = req.params.query || req.query.query || '';
+        logger.info('Fetching search history', { query });
+        
+        const history = await db.getEbayHistory(query);
+        res.json({
+            success: true,
+            history
         });
+    } catch (error) {
+        logger.error('Error fetching search history:', error);
+        handleError(error, res);
+    }
+});
 
-        if (results.length === 0) {
-            logger.warn('No historical data found', { query });
-            return res.status(404).json({
+// Get trending searches
+router.get('/trending', async (req, res) => {
+    try {
+        const { period = '24h', limit = 10 } = req.query;
+        
+        // Get the most frequent searches in the last period
+        const sql = `
+            SELECT query, COUNT(*) as count
+            FROM searches
+            WHERE timestamp > datetime('now', '-1 day')
+            GROUP BY query
+            ORDER BY count DESC
+            LIMIT ?
+        `;
+        
+        const trending = await db.all(sql, [parseInt(limit)]);
+
+        res.json({
+            success: true,
+            trending
+        });
+    } catch (error) {
+        logger.error('Error fetching trending searches:', error);
+        handleError(error, res);
+    }
+});
+
+// Get related searches
+router.get('/related', async (req, res) => {
+    try {
+        const { query } = req.query;
+        
+        if (!query) {
+            return res.status(400).json({
                 success: false,
-                error: 'No historical data found for this search query.'
+                error: 'Query parameter is required'
             });
         }
 
-        logger.info('Historical data request completed', {
-            query,
-            recordCount: results.length
-        });
+        // Find searches that contain similar words
+        const sql = `
+            SELECT DISTINCT query
+            FROM searches
+            WHERE query LIKE ?
+            AND query != ?
+            ORDER BY timestamp DESC
+            LIMIT 5
+        `;
+        
+        const related = await db.all(sql, [`%${query}%`, query]);
 
         res.json({
             success: true,
-            data: results
+            related
         });
-
     } catch (error) {
-        logger.error('Historical data error', {
-            query,
-            error: error.message,
-            stack: error.stack
-        });
-
-        res.status(500).json({
-            success: false,
-            error: 'An error occurred while fetching historical data.'
-        });
+        logger.error('Error fetching related searches:', error);
+        handleError(error, res);
     }
 });
+
+// Helper function to calculate statistics from search results
+function calculateStats(results) {
+    if (!results || results.length === 0) {
+        return {
+            averagePrice: 0,
+            highestPrice: 0,
+            lowestPrice: 0,
+            totalSales: 0,
+            itemCount: 0
+        };
+    }
+
+    const prices = results.map(item => parseFloat(item.price));
+    
+    return {
+        averagePrice: prices.reduce((a, b) => a + b, 0) / prices.length,
+        highestPrice: Math.max(...prices),
+        lowestPrice: Math.min(...prices),
+        totalSales: prices.reduce((a, b) => a + b, 0),
+        itemCount: results.length
+    };
+}
 
 module.exports = router; 
