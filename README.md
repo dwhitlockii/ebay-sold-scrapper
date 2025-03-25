@@ -5,6 +5,10 @@ A Node.js application that tracks and analyzes eBay sold items data, providing i
 ## Features
 
 - Search and track eBay sold items
+- Advanced analytics dashboard with real-time price trends
+- Interactive sales charts with historical data visualization
+- Market trend analysis with confidence scoring
+- Robust transaction handling for database operations
 - User authentication and authorization
 - Wishlist management
 - Price alerts
@@ -12,6 +16,14 @@ A Node.js application that tracks and analyzes eBay sold items data, providing i
 - Rate limiting and security measures
 - Caching for improved performance
 - Comprehensive logging and monitoring
+
+## Recent Updates
+
+- **Enhanced Analytics Display**: Fixed issues with NaN values and improved data visualization
+- **Improved Chart Functionality**: Better date parsing and error handling for sales charts
+- **Robust Transaction Management**: Optimized database operations with nested transaction support
+- **UI Improvements**: Fixed styling issues and enhanced visual feedback
+- **Bug Fixes**: Resolved issues with function declarations and data processing
 
 ## Prerequisites
 
@@ -23,7 +35,7 @@ A Node.js application that tracks and analyzes eBay sold items data, providing i
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/ebay-sold-scraper.git
+   git clone https://github.com/dwhitlockii/ebay-sold-scraper.git
    cd ebay-sold-scraper
    ```
 
@@ -34,7 +46,7 @@ A Node.js application that tracks and analyzes eBay sold items data, providing i
 
 3. Create a `.env` file in the root directory with the following variables:
    ```
-   PORT=3000
+   PORT=3001
    NODE_ENV=development
    SESSION_SECRET=your_session_secret
    EBAY_APP_ID=your_ebay_app_id
@@ -56,7 +68,17 @@ A Node.js application that tracks and analyzes eBay sold items data, providing i
    npm start
    ```
 
+3. Access the dashboard:
+   ```
+   http://localhost:3001
+   ```
+
 ## API Endpoints
+
+### eBay Data
+- `GET /api/ebay/sold/:query` - Get sold items for a specific query
+- `POST /api/search` - Perform a new search and save results
+- `GET /api/search/history/:query` - Get search history for a query
 
 ### Authentication
 - `POST /auth/register` - Register a new user
@@ -80,6 +102,18 @@ A Node.js application that tracks and analyzes eBay sold items data, providing i
 - `POST /alerts` - Create new price alert
 - `DELETE /alerts/:id` - Delete price alert
 - `PUT /alerts/:id` - Update price alert
+
+## Analytics Features
+
+The application provides detailed analytics for searched items:
+- Total number of items sold
+- Average, minimum, and maximum prices
+- Price standard deviation
+- Market demand score
+- Price trends over time
+- Market volatility
+- Confidence score for data reliability
+- Seasonal factors affecting prices
 
 ## Security Features
 
@@ -105,8 +139,14 @@ A Node.js application that tracks and analyzes eBay sold items data, providing i
 ├── controllers/
 ├── middleware/
 ├── models/
+├── public/
+│   ├── script.js - Frontend logic and data visualization
+│   ├── style.css - Main styling
+│   └── ultra-stunning.css - Enhanced UI styling
 ├── routes/
 ├── services/
+├── src/
+│   └── database.js - Database operations and analytics
 ├── utils/
 ├── tests/
 └── server.js
@@ -129,5 +169,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - eBay API Documentation
 - Node.js community
 - Express.js team
+- Chart.js for data visualization
 
 

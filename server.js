@@ -14,9 +14,6 @@ const db = require('./database');
 const { saveEbayResults } = require('./database');
 const settings = require('./settings');
 const crypto = require('crypto');
-const authRoutes = require('./routes/auth');
-const searchRoutes = require('./routes/search');
-const wishlistRoutes = require('./routes/wishlist');
 const { logger, stream } = require('./utils/logger');
 const { sessionConfig, corsOptions, helmetConfig, sanitizeInput, preventSqlInjection } = require('./utils/security');
 const { handleError } = require('./utils/errorHandler');
@@ -25,6 +22,14 @@ const fs = require('fs');
 const helmet = require('helmet');
 const compression = require('compression');
 const session = require('express-session');
+
+// Route imports
+const authRoutes = require('./routes/auth');
+const searchRoutes = require('./routes/search');
+const wishlistRoutes = require('./routes/wishlist');
+const ebayRoutes = require('./src/routes/ebay');
+const analyticsRoutes = require('./routes/analytics');
+const amazonRoutes = require('./routes/amazon');
 
 // Add this near the top of the file after the imports
 const DEBUG = process.env.DEBUG === 'true';
@@ -40,6 +45,8 @@ logger.info('Initializing database');
 db.initDatabase();
 
 const app = express();
+
+// ... existing code
 
 // Enhanced security headers
 app.use(helmet(helmetConfig));
@@ -157,6 +164,9 @@ function createRateLimiter() {
 app.use('/api/auth', authRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/wishlist', wishlistRoutes);
+app.use('/api/ebay', ebayRoutes);
+app.use('/api/amazon', amazonRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // Settings routes
 app.get('/api/settings/ratelimit', (req, res) => {

@@ -9,16 +9,36 @@ function getQuery() {
 function toggleSpinner(show) {
   const spinner = document.getElementById('loadingSpinner');
   const results = document.getElementById('results');
-  if (spinner) spinner.style.display = show ? 'block' : 'none';
-  if (results) results.style.display = show ? 'none' : 'block';
+  if (spinner) {
+    spinner.classList.toggle('d-none', !show);
+    spinner.style.removeProperty('display');
+  }
+  if (results) {
+    results.classList.toggle('d-none', show);
+    results.style.removeProperty('display');
+  }
 }
 
 function hideResults() {
   const elements = ['ebayResults', 'amazonResults', 'historicalData'];
   elements.forEach(id => {
     const element = document.getElementById(id);
-    if (element) element.style.display = 'none';
+    if (element) {
+      element.classList.add('d-none');
+      // Reset any inline display style that might interfere
+      element.style.removeProperty('display');
+    }
   });
+}
+
+// Function to show results
+function showResults(elementId) {
+  const element = document.getElementById(elementId);
+  if (element) {
+    element.classList.remove('d-none');
+    // Reset any inline display style that might interfere
+    element.style.removeProperty('display');
+  }
 }
 
 // Authentication helper functions
@@ -169,21 +189,38 @@ document.addEventListener('DOMContentLoaded', function() {
   const searchBtn = document.getElementById('ebaySearchBtn');
   if (searchBtn) {
     searchBtn.addEventListener('click', async function() {
-      console.log('Search button clicked');
+    console.log('Search button clicked');
       const query = getQuery();
-      console.log('Search query:', query);
-      
-      if (!query) {
+    console.log('Search query:', query);
+
+    if (!query) {
         alert('Please enter an item name.');
-        return;
-      }
+      return;
+    }
 
       hideResults();
       toggleSpinner(true);
       console.log('Fetching data from API...');
 
       try {
-        const response = await fetch('/api/search', {
+        // First fetch the items from eBay
+        const ebayResponse = await fetch(`/api/ebay/sold/${encodeURIComponent(query)}`);
+        console.log('API Response status:', ebayResponse.status);
+        console.log('API Response headers:', Object.fromEntries(ebayResponse.headers.entries()));
+        
+        if (!ebayResponse.ok) {
+          throw new Error(`HTTP error! status: ${ebayResponse.status}`);
+        }
+        
+        const ebayData = await ebayResponse.json();
+        console.log('Full API Response data:', ebayData);
+        console.log('Items count:', ebayData.items?.length);
+        console.log('Analytics data:', ebayData.analytics);
+        
+        displayEbayResults(ebayData);
+
+        // Then save the search
+        const searchResponse = await fetch('/api/search', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -191,23 +228,20 @@ document.addEventListener('DOMContentLoaded', function() {
           body: JSON.stringify({ query })
         });
 
-        console.log('API Response status:', response.status);
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        if (!searchResponse.ok) {
+          console.warn('Failed to save search history');
         }
 
-        const data = await response.json();
-        displayEbayResults(data);
+        // Load historical data
         loadHistoricalData(query);
 
-      } catch (error) {
-        console.log('Error during search:', error);
-        console.log('Error stack:', error.stack);
+    } catch (error) {
+      console.error('Error during search:', error);
+      console.error('Error stack:', error.stack);
         alert('An error occurred while searching. Please try again.');
-      } finally {
+    } finally {
         toggleSpinner(false);
-        console.log('Search operation completed');
+      console.log('Search operation completed');
       }
     });
   }
@@ -219,8 +253,8 @@ document.addEventListener('DOMContentLoaded', function() {
       const query = getQuery();
       if (!query) {
         alert('Please enter an item name.');
-        return;
-      }
+    return;
+  }
 
       hideResults();
       toggleSpinner(true);
@@ -259,15 +293,25 @@ document.addEventListener('DOMContentLoaded', function() {
   function toggleSpinner(show) {
     const spinner = document.getElementById('loadingSpinner');
     const results = document.getElementById('results');
-    if (spinner) spinner.style.display = show ? 'block' : 'none';
-    if (results) results.style.display = show ? 'none' : 'block';
+    if (spinner) {
+      spinner.classList.toggle('d-none', !show);
+      spinner.style.removeProperty('display');
+    }
+    if (results) {
+      results.classList.toggle('d-none', show);
+      results.style.removeProperty('display');
+    }
   }
 
   function hideResults() {
     const elements = ['ebayResults', 'amazonResults', 'historicalData'];
     elements.forEach(id => {
       const element = document.getElementById(id);
-      if (element) element.style.display = 'none';
+      if (element) {
+        element.classList.add('d-none');
+        // Reset any inline display style that might interfere
+        element.style.removeProperty('display');
+      }
     });
   }
 
@@ -344,118 +388,356 @@ document.addEventListener('DOMContentLoaded', function() {
   setTimeout(fixScrollingIssues, 1000);
 });
 
+// Function to display eBay results
 function displayEbayResults(data) {
-  console.log('Starting displayEbayResults with data:', data);
-    
-  if (data.error) {
-    console.error('Error in data:', data.error);
-    alert(data.error);
-    return;
-  }
-  
-  try {
-    // Show the results section
-    const ebayResults = document.getElementById('ebayResults');
-    if (!ebayResults) {
-      console.error('ebayResults element not found');
-      return;
-    }
+    try {
+        console.log('displayEbayResults called with data:', data);
+        
+        if (!data || !data.items) {
+            console.error('No items found in data');
+            return;
+        }
 
-    ebayResults.classList.remove('d-none');
-    
-    // Update prices using stats from the response
-    const elements = {
-      avgPrice: document.getElementById('avgPrice'),
-      highPrice: document.getElementById('highPrice'),
-      lowPrice: document.getElementById('lowPrice'),
-      totalSales: document.getElementById('totalSales')
-    };
+        console.log('Items array length:', data.items.length);
+        console.log('First item example:', data.items[0]);
 
-    // Check if all elements exist
-    Object.entries(elements).forEach(([key, element]) => {
-      if (!element) {
-        console.error(`${key} element not found`);
-      }
-    });
+        // Show the results container
+        showResults('ebayResults');
+        
+        // Calculate analytics if not provided
+        const analytics = data.analytics || calculateAnalytics(data.items);
+        console.log('Analytics data:', analytics);
 
-    const stats = data.stats;
-    // Update values if elements exist
-    if (elements.avgPrice) elements.avgPrice.textContent = `$${stats.avgPrice.toFixed(2)}`;
-    if (elements.highPrice) elements.highPrice.textContent = `$${stats.highPrice.toFixed(2)}`;
-    if (elements.lowPrice) elements.lowPrice.textContent = `$${stats.lowPrice.toFixed(2)}`;
-    if (elements.totalSales) elements.totalSales.textContent = stats.totalItems;
+        // Update analytics display
+        const analyticsElements = {
+            totalItems: { id: 'totalItems', value: data.items.length },
+            avgPrice: { 
+                id: 'avgPrice', 
+                value: analytics.avg_price, 
+                format: (v) => `$${v.toFixed(2)}` 
+            },
+            priceRange: { 
+                id: 'priceRange', 
+                value: analytics.min_price && analytics.max_price ? 
+                    `$${analytics.min_price.toFixed(2)} - $${analytics.max_price.toFixed(2)}` : 
+                    'N/A' 
+            },
+            priceStdDev: { 
+                id: 'priceStdDev', 
+                value: analytics.price_std_dev, 
+                format: (v) => `$${v.toFixed(2)}` 
+            },
+            demandScore: { 
+                id: 'demandScore', 
+                value: analytics.demand_score, 
+                format: (v) => v.toFixed(2) 
+            },
+            marketSaturation: { 
+                id: 'marketSaturation', 
+                value: analytics.market_saturation, 
+                format: (v) => v.toFixed(2) 
+            },
+            priceTrend: { 
+                id: 'priceTrend', 
+                value: analytics.price_trend, 
+                format: (v) => `${v.toFixed(2)}%` 
+            },
+            confidenceScore: { 
+                id: 'confidenceScore', 
+                value: analytics.confidence_score, 
+                format: (v) => `${(v * 100).toFixed(2)}%` 
+            }
+        };
 
-    // Update price alert elements if they exist
-    const alertPriceElement = document.getElementById('alertPrice');
-    const currentPriceElement = document.getElementById('currentPrice');
-    
-    if (alertPriceElement && currentPriceElement) {
-      alertPriceElement.textContent = `$${stats.avgPrice.toFixed(2)}`;
-      currentPriceElement.dataset.price = stats.avgPrice;
-    }
-
-    // Display the first item's image if available
-    const itemImage = document.getElementById('ebayItemImage');
-    if (itemImage) {
-      if (data.items && data.items.length > 0 && data.items[0].image) {
-        itemImage.src = data.items[0].image;
-      } else {
-        itemImage.src = 'default-image.png';
-      }
-    }
-
-    // Display items list
-    const itemListContainer = document.getElementById('ebayItemList');
-    if (itemListContainer) {
-      const listGroup = itemListContainer.querySelector('ul');
-      if (listGroup) {
-        listGroup.innerHTML = '';
-        data.items.forEach(item => {
-          const listItem = document.createElement('li');
-          listItem.className = 'list-group-item d-flex justify-content-between align-items-center';
-          listItem.innerHTML = `
-            <div>
-              <a href="${item.link}" target="_blank" class="text-decoration-none">${item.title}</a>
-              <small class="text-muted d-block">${item.soldDateText || new Date(item.soldDate).toLocaleDateString()}</small>
-            </div>
-            <span class="badge bg-primary rounded-pill">$${item.soldPrice.toFixed(2)}</span>
-          `;
-          listGroup.appendChild(listItem);
+        // Update each analytics element
+        Object.entries(analyticsElements).forEach(([key, config]) => {
+            const element = document.getElementById(config.id);
+            if (element) {
+                const value = config.value;
+                if (value !== undefined && value !== null) {
+                    const displayValue = config.format ? config.format(value) : value;
+                    element.textContent = displayValue;
+                    console.log(`Updated ${key}:`, displayValue);
+                } else {
+                    element.textContent = 'N/A';
+                    console.log(`${key} value not available`);
+                }
+            } else {
+                console.error(`Element not found: ${config.id}`);
+            }
         });
-      }
-    }
 
-    console.log('Successfully displayed eBay results');
+        // Update items list
+        const itemsList = document.querySelector('#ebayItemList ul');
+        if (itemsList) {
+            console.log('Updating items list');
+            itemsList.innerHTML = ''; // Clear existing items
+            data.items.forEach((item, index) => {
+                console.log(`Processing item ${index}:`, item);
+                const li = document.createElement('li');
+                li.className = 'list-group-item d-flex justify-content-between align-items-center';
+                li.innerHTML = `
+                    <div>
+                        <h6 class="mb-0">${item.title}</h6>
+                        <small class="text-muted">Sold on: ${new Date(item.soldDate).toLocaleDateString()}</small>
+                    </div>
+                    <span class="badge bg-primary rounded-pill">$${item.price.toFixed(2)}</span>
+                `;
+                itemsList.appendChild(li);
+            });
+        } else {
+            console.error('Items list container not found');
+        }
+
+        // Update chart
+        console.log('Updating sales chart with items:', data.items);
+        updateSalesChart(data.items);
+
   } catch (error) {
     console.error('Error in displayEbayResults:', error);
     console.error('Error stack:', error.stack);
   }
 }
 
+// Helper function to calculate analytics if not provided by the API
+function calculateAnalytics(items) {
+    const prices = items.map(item => item.price);
+    const sum = prices.reduce((a, b) => a + b, 0);
+    const avg = sum / prices.length;
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    
+    // Calculate standard deviation
+    const squareDiffs = prices.map(price => Math.pow(price - avg, 2));
+    const avgSquareDiff = squareDiffs.reduce((a, b) => a + b, 0) / prices.length;
+    const stdDev = Math.sqrt(avgSquareDiff);
+
+    // Simple demand score based on number of sales
+    const demand_score = Math.min(items.length / 100, 1);
+    
+    // Market saturation based on price spread
+    const market_saturation = (max - min) / max;
+    
+    // Price trend (mock calculation)
+    const price_trend = ((avg - min) / min) * 100;
+    
+    // Confidence score based on number of items
+    const confidence_score = Math.min(items.length / 50, 1);
+
+    return {
+        avg_price: avg,
+        min_price: min,
+        max_price: max,
+        price_std_dev: stdDev,
+        demand_score,
+        market_saturation,
+        price_trend,
+        confidence_score
+    };
+}
+
+// Helper function to calculate standard deviation
+function calculateStandardDeviation(values) {
+    const n = values.length;
+    if (n < 2) return 0;
+    
+    const mean = values.reduce((a, b) => a + b, 0) / n;
+    const variance = values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (n - 1);
+    return Math.sqrt(variance);
+}
+
+// Function to update sales chart
+function updateSalesChart(items) {
+    try {
+        // Wait for Chart.js to be available
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js is not loaded');
+            return;
+        }
+
+        const ctx = document.getElementById('salesChart');
+        if (!ctx) {
+            console.error('Sales chart canvas not found');
+            return;
+        }
+
+        console.log('Chart items:', items);
+
+        // Group items by date and calculate average price
+        const groupedData = items.reduce((acc, item) => {
+            // Ensure sold_date is valid
+            let dateObj;
+            try {
+                // Try to parse the date
+                if (item.soldDate) {
+                    dateObj = new Date(item.soldDate);
+                } else if (item.sold_date) {
+                    dateObj = new Date(item.sold_date);
+                }
+
+                // Check if date is valid
+                if (!dateObj || isNaN(dateObj.getTime())) {
+                    // Use current date if invalid
+                    dateObj = new Date();
+                }
+            } catch (error) {
+                console.warn('Date parsing error:', error);
+                dateObj = new Date();
+            }
+
+            // Format the date string
+            const date = dateObj.toLocaleDateString();
+            
+            // Get the price (handle different property names)
+            const price = parseFloat(item.price) || 0;
+            
+            if (!acc[date]) {
+                acc[date] = { total: price, count: 1 };
+            } else {
+                acc[date].total += price;
+                acc[date].count += 1;
+            }
+            return acc;
+        }, {});
+
+        const dates = Object.keys(groupedData).sort((a, b) => {
+            // Sort dates chronologically
+            return new Date(a) - new Date(b);
+        });
+        const avgPrices = dates.map(date => groupedData[date].total / groupedData[date].count);
+
+        // Add debugging
+        console.log('Grouped data:', groupedData);
+        console.log('Dates for chart:', dates);
+        console.log('Average prices for chart:', avgPrices);
+
+        // Destroy existing chart if it exists and is a valid Chart instance
+        if (window.salesChart && window.salesChart instanceof Chart) {
+            window.salesChart.destroy();
+        }
+
+        // Create new chart
+        window.salesChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: dates,
+                datasets: [{
+                    label: 'Average Price',
+                    data: avgPrices,
+                    borderColor: 'rgb(75, 192, 192)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: value => `$${value.toFixed(2)}`
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: context => `$${context.parsed.y.toFixed(2)}`
+                        }
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error updating sales chart:', error);
+    }
+}
+
+// Function to show loading state
+function showLoading() {
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    if (loadingSpinner) {
+        loadingSpinner.classList.remove('d-none');
+    }
+}
+
+// Function to hide loading state
+function hideLoading() {
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    if (loadingSpinner) {
+        loadingSpinner.classList.add('d-none');
+    }
+}
+
 function displayHistoricalData(history) {
   const historyTable = document.getElementById('ebay-history-table');
-  if (!historyTable) return;
+  if (!historyTable) {
+    console.error('History table element not found');
+    return;
+  }
 
   if (!history || history.length === 0) {
     historyTable.innerHTML = '<tr><td colspan="6" class="text-center">No historical data available</td></tr>';
     return;
   }
 
+  console.log('Displaying historical data:', history);
+
   historyTable.innerHTML = history.map(item => {
-    const date = new Date(item.timestamp).toLocaleDateString();
-    const trend = ''; // You can implement trend calculation here if needed
+    // Ensure we have a valid date
+    let dateStr = 'N/A';
+    try {
+      const date = item.timestamp ? new Date(item.timestamp) : null;
+      if (date && !isNaN(date.getTime())) {
+        dateStr = date.toLocaleDateString();
+      } else if (item.date) {
+        const altDate = new Date(item.date);
+        if (!isNaN(altDate.getTime())) {
+          dateStr = altDate.toLocaleDateString();
+        }
+      }
+    } catch (error) {
+      console.warn('Error formatting date:', error);
+    }
+    
+    const trend = calculatePriceChange(item);
+    
+    console.log('Processing history item:', {
+      date: dateStr,
+      avg_price: item.avg_price,
+      high_price: item.high_price || item.max_price,
+      low_price: item.low_price || item.min_price,
+      total_sales: item.total_sales,
+      trend
+    });
+    
+    // Handle different property names (avg_price vs average_price, etc.)
+    const avgPrice = item.avg_price !== undefined ? item.avg_price : (item.average_price || 0);
+    const highPrice = item.high_price !== undefined ? item.high_price : (item.max_price || 0);
+    const lowPrice = item.low_price !== undefined ? item.low_price : (item.min_price || 0);
+    const totalSales = item.total_sales || 0;
     
     return `
       <tr>
-        <td>${date}</td>
-        <td>$${item.avg_price?.toFixed(2) || 'N/A'}</td>
-        <td>$${item.high_price?.toFixed(2) || 'N/A'}</td>
-        <td>$${item.low_price?.toFixed(2) || 'N/A'}</td>
-        <td>${item.total_sales || 0}</td>
+        <td>${dateStr}</td>
+        <td>$${avgPrice.toFixed(2)}</td>
+        <td>$${highPrice.toFixed(2)}</td>
+        <td>$${lowPrice.toFixed(2)}</td>
+        <td>${totalSales}</td>
         <td>${trend}</td>
       </tr>
     `;
   }).join('');
+}
+
+// Helper function to calculate price change
+function calculatePriceChange(item) {
+  if (!item.avg_price || !item.previous_price) return '';
+  
+  const priceChange = ((item.avg_price - item.previous_price) / item.previous_price) * 100;
+  
+  if (priceChange === 0) return '→';
+  if (priceChange > 0) return `<span class="text-success">↑ ${priceChange.toFixed(1)}%</span>`;
+  return `<span class="text-danger">↓ ${Math.abs(priceChange).toFixed(1)}%</span>`;
 }
 
 // -------------------------
@@ -650,12 +932,34 @@ function animateValue(element, start, end, duration) {
 
 async function loadHistoricalData(query) {
   try {
+    console.log('Loading historical data for query:', query);
     const response = await fetch(`/api/search/history/${encodeURIComponent(query)}`);
     const data = await response.json();
     
     if (!response.ok) {
       throw new Error(data.error || 'Failed to fetch historical data');
     }
+    
+    console.log('Historical data received:', data);
+    
+    if (!data.history || data.history.length === 0) {
+      console.log('No historical data found');
+      const historyTable = document.getElementById('ebay-history-table');
+      if (historyTable) {
+        historyTable.innerHTML = '<tr><td colspan="6" class="text-center">No historical data available</td></tr>';
+      }
+    return;
+  }
+
+    // Sort history by date in descending order
+    data.history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    // Add previous_price for trend calculation
+    data.history.forEach((item, index) => {
+      if (index < data.history.length - 1) {
+        item.previous_price = data.history[index + 1].avg_price;
+      }
+    });
     
     displayHistoricalData(data.history);
   } catch (error) {
@@ -667,382 +971,77 @@ async function loadHistoricalData(query) {
   }
 }
 
-function addPriceIndicators(record) {
-  const priceChange = calculatePriceChange(record);
-  console.log(`Price change for ${new Date(record.timestamp).toLocaleDateString()}: ${priceChange}%`);
-  
-  return `
-    <td>
-      $${record.avg_price.toFixed(2)}
-      <span class="price-indicator ${priceChange > 0 ? 'up' : 'down'}" 
-            data-bs-toggle="tooltip" 
-            title="${Math.abs(priceChange)}% ${priceChange > 0 ? 'increase' : 'decrease'}">
-        <i class="fas fa-arrow-${priceChange > 0 ? 'up text-success' : 'down text-danger'}"></i>
-      </span>
-    </td>
-  `;
-}
-
-function calculatePriceChange(record) {
-  // Simple mock implementation for testing
-  return Math.random() > 0.5 ? 5 : -5;
-}
-
-// Price Alert functionality
-document.getElementById('setAlertBtn').addEventListener('click', function() {
-  const threshold = document.getElementById('alertThreshold').value;
-  const currentPrice = parseFloat(document.getElementById('currentPrice').dataset.price);
-  
-  if (!threshold) {
-    alert('Please enter a price threshold');
-    return;
-  }
-
-  if (!currentPrice) {
-    alert('Please search for a product first');
-    return;
-  }
-
-  // Save the alert to the database
-  fetch('/api/price-alerts', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      price: parseFloat(threshold),
-      product: document.getElementById('itemQuery').value
-    })
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.success) {
-      alert('Price alert set successfully!');
-      // Update the UI to show active alert
-      document.getElementById('currentPrice').classList.add('active');
-    }
-  })
-  .catch(error => console.error('Error:', error));
-});
-
 // Add spectacular effects to the page
 function addSpectacularEffects() {
-  // Add 3D tilt effect to cards
-  const cards = document.querySelectorAll('.card-3d');
-  cards.forEach(card => {
-    card.addEventListener('mousemove', e => {
-      const rect = card.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      
-      const centerX = rect.width / 2;
-      const centerY = rect.height / 2;
-      
-      const angleX = (y - centerY) / 20;
-      const angleY = (centerX - x) / 20;
-      
-      card.style.transform = `rotateX(${angleX}deg) rotateY(${angleY}deg) scale(1.02)`;
-    });
-    
-    card.addEventListener('mouseleave', () => {
-      card.style.transform = 'rotateX(0) rotateY(0) scale(1)';
-    });
-  });
-  
-  // Add star rating functionality
-  const stars = document.querySelectorAll('.rating i');
-  if (stars.length > 0) {
-    stars.forEach(star => {
-      star.addEventListener('click', () => {
-        const rating = parseInt(star.getAttribute('data-rating'));
-        document.getElementById('ratingValue').value = rating;
-        
-        // Update stars display
-        stars.forEach(s => {
-          const sRating = parseInt(s.getAttribute('data-rating'));
-          if (sRating <= rating) {
-            s.classList.remove('far');
-            s.classList.add('fas');
-          } else {
-            s.classList.remove('fas');
-            s.classList.add('far');
-          }
-        });
-      });
-      
-      // Hover effect
-      star.addEventListener('mouseenter', () => {
-        const rating = parseInt(star.getAttribute('data-rating'));
-        
-        stars.forEach(s => {
-          const sRating = parseInt(s.getAttribute('data-rating'));
-          if (sRating <= rating) {
-            s.classList.add('text-warning');
-          }
-        });
-      });
-      
-      star.addEventListener('mouseleave', () => {
-        stars.forEach(s => {
-          s.classList.remove('text-warning');
-        });
-      });
-    });
-  }
-  
-  // Add trend indicators to price history
-  function addTrendIndicators() {
-    const historyTable = document.getElementById('ebay-history-table');
-    if (historyTable && historyTable.rows.length > 1) {
-      // Get all price cells
-      const rows = Array.from(historyTable.rows);
-      
-      // Skip if only one row
-      if (rows.length < 2) return;
-      
-      // Process each row except the first (most recent)
-      for (let i = 1; i < rows.length; i++) {
-        const currentAvgPrice = parseFloat(rows[i-1].cells[1].textContent.replace('$', ''));
-        const previousAvgPrice = parseFloat(rows[i].cells[1].textContent.replace('$', ''));
-        
-        if (!isNaN(currentAvgPrice) && !isNaN(previousAvgPrice) && previousAvgPrice > 0) {
-          const percentChange = ((currentAvgPrice - previousAvgPrice) / previousAvgPrice) * 100;
-          
-          // Add trend indicator to the trend cell
-          const trendCell = rows[i-1].cells[5];
-          if (percentChange > 0) {
-            trendCell.innerHTML = `<span class="trend-up">+${percentChange.toFixed(1)}%</span>`;
-          } else if (percentChange < 0) {
-            trendCell.innerHTML = `<span class="trend-down">${percentChange.toFixed(1)}%</span>`;
-          } else {
-            trendCell.innerHTML = `<span>0%</span>`;
-          }
-        }
-      }
-    }
-  }
-  
-  // Call addTrendIndicators when history is loaded
-  const originalDisplayHistoricalData = displayHistoricalData;
-  displayHistoricalData = function(history) {
-    originalDisplayHistoricalData(history);
-    setTimeout(addTrendIndicators, 100);
-  };
-  
-  // Enhanced loading animation
-  const originalShowLoading = showLoading;
-  showLoading = function() {
-    originalShowLoading();
-    document.body.classList.add('loading-active');
-  };
-  
-  const originalHideLoading = hideLoading;
-  hideLoading = function() {
-    originalHideLoading();
-    document.body.classList.remove('loading-active');
-  };
-  
-  // Enhanced chart rendering
-  const originalDisplayEbayResults = displayEbayResults;
-  displayEbayResults = function(data) {
-    originalDisplayEbayResults(data);
-    
-    // Add enhanced chart if it exists
-    const chartCanvas = document.getElementById('salesChart');
-    if (chartCanvas && data.items && data.items.length > 0) {
-      // Group items by date
-      const dateGroups = {};
-      data.items.forEach(item => {
-        const date = new Date(item.soldDate || Date.now()).toLocaleDateString();
-        if (!dateGroups[date]) {
-          dateGroups[date] = [];
-        }
-        dateGroups[date].push(item);
-      });
-      
-      // Calculate average price per day
-      const dates = Object.keys(dateGroups).sort((a, b) => new Date(a) - new Date(b));
-      const avgPrices = dates.map(date => {
-        const prices = dateGroups[date].map(item => item.price || item.soldPrice);
-        return prices.reduce((sum, price) => sum + price, 0) / prices.length;
-      });
-      
-      // Create ultra gradient for chart
-      const ctx = chartCanvas.getContext('2d');
-      const gradientFill = ctx.createLinearGradient(0, 0, 0, 400);
-      gradientFill.addColorStop(0, 'rgba(67, 97, 238, 0.7)');
-      gradientFill.addColorStop(1, 'rgba(67, 97, 238, 0.1)');
-      
-      const gradientStroke = ctx.createLinearGradient(0, 0, 400, 0);
-      gradientStroke.addColorStop(0, '#ff416c');
-      gradientStroke.addColorStop(0.5, '#4361ee');
-      gradientStroke.addColorStop(1, '#00ffff');
-      
-      // Create or update chart
-      if (window.priceChart) {
-        window.priceChart.destroy();
-      }
-      
-      window.priceChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: dates,
-          datasets: [{
-            label: 'Average Price',
-            data: avgPrices,
-            borderColor: gradientStroke,
-            backgroundColor: gradientFill,
-            borderWidth: 4,
-            pointBackgroundColor: '#ffffff',
-            pointBorderColor: gradientStroke,
-            pointBorderWidth: 2,
-            pointRadius: 8,
-            pointHoverRadius: 12,
-            pointHoverBackgroundColor: '#ffffff',
-            pointHoverBorderColor: '#ff416c',
-            pointHoverBorderWidth: 4,
-            tension: 0.4,
-            fill: true
-          }]
+  try {
+    // Initialize particles.js
+    particlesJS('particles-js', {
+        particles: {
+            number: { value: 80, density: { enable: true, value_area: 800 } },
+            color: { value: '#ffffff' },
+            shape: { type: 'circle' },
+            opacity: { value: 0.5, random: false },
+            size: { value: 3, random: true },
+            line_linked: { enable: true, distance: 150, color: '#ffffff', opacity: 0.4, width: 1 },
+            move: { enable: true, speed: 6, direction: 'none', random: false, straight: false, out_mode: 'out', bounce: false }
         },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: {
-              display: true,
-              position: 'top',
-              labels: {
-                font: {
-                  family: 'Poppins',
-                  size: 16,
-                  weight: 'bold'
-                },
-                color: '#4361ee'
-              }
-            },
-            tooltip: {
-              mode: 'index',
-              intersect: false,
-              backgroundColor: 'rgba(255, 255, 255, 0.9)',
-              titleColor: '#333',
-              bodyColor: '#333',
-              borderColor: '#4361ee',
-              borderWidth: 2,
-              padding: 15,
-              cornerRadius: 10,
-              displayColors: false,
-              titleFont: {
-                family: 'Poppins',
-                size: 16,
-                weight: 'bold'
-              },
-              bodyFont: {
-                family: 'Poppins',
-                size: 14
-              },
-              callbacks: {
-                label: function(context) {
-                  return `Average Price: $${context.raw.toFixed(2)}`;
-                }
-              }
+        interactivity: {
+            detect_on: 'canvas',
+            events: {
+                onhover: { enable: true, mode: 'repulse' },
+                onclick: { enable: true, mode: 'push' },
+                resize: true
             }
-          },
-          scales: {
-            x: {
-              grid: {
-                display: false
-              },
-              ticks: {
-                font: {
-                  family: 'Poppins',
-                  size: 12
-                },
-                color: '#6c757d'
-              }
-            },
-            y: {
-              grid: {
-                borderDash: [5, 5],
-                color: 'rgba(67, 97, 238, 0.1)'
-              },
-              ticks: {
-                font: {
-                  family: 'Poppins',
-                  size: 12
-                },
-                color: '#6c757d',
-                callback: function(value) {
-                  return '$' + value;
-                }
-              }
-            }
-          },
-          animation: {
-            duration: 2000,
-            easing: 'easeOutQuart',
-            onProgress: function(animation) {
-              const chartInstance = animation.chart;
-              const ctx = chartInstance.ctx;
-              const dataset = chartInstance.data.datasets[0];
-              const meta = chartInstance.getDatasetMeta(0);
-              
-              // Add glow effect to line
-              ctx.shadowColor = 'rgba(67, 97, 238, 0.5)';
-              ctx.shadowBlur = 10;
-              ctx.shadowOffsetX = 0;
-              ctx.shadowOffsetY = 0;
-              
-              // Reset shadow after drawing
-              ctx.shadowColor = 'transparent';
-              ctx.shadowBlur = 0;
-            }
-          },
-          hover: {
-            mode: 'index',
-            intersect: false
-          }
-        }
-      });
-      
-      // Add animation to chart container
-      const chartContainer = chartCanvas.closest('.chart-ultra');
-      if (chartContainer) {
-        chartContainer.classList.add('fade-in-up');
-        
-        // Add 3D effect on hover
-        chartContainer.addEventListener('mouseenter', () => {
-          chartContainer.style.transform = 'perspective(1000px) rotateX(10deg) rotateY(5deg) translateZ(10px)';
-        });
-        
-        chartContainer.addEventListener('mouseleave', () => {
-          chartContainer.style.transform = 'perspective(1000px) rotateX(0) rotateY(0) translateZ(0)';
-        });
-      }
-    }
-  };
+        },
+        retina_detect: true
+    });
+  } catch (error) {
+    console.error('Error adding spectacular effects:', error);
+  }
 }
 
-// Fix scrolling issues in the ultra stunning effects
+// Enhanced scrolling fix function
 function fixScrollingIssues() {
   // Ensure body scrolling is not blocked
   document.body.style.overflow = 'auto';
+  document.documentElement.style.overflow = 'auto';
+  document.body.style.height = 'auto';
+  document.documentElement.style.height = 'auto';
   
   // Fix potential issues with the neon grid background
   const body = document.body;
   if (body.classList.contains('neon-grid')) {
-    // Modify the mousemove event to not interfere with scrolling
+    // Remove any existing mousemove event listeners
     document.removeEventListener('mousemove', handleBackgroundEffect);
-    document.addEventListener('mousemove', handleBackgroundEffect, { passive: true });
+    
+    // Add a throttled version of the background effect to improve performance
+    let lastExecution = 0;
+    document.addEventListener('mousemove', function(e) {
+      const now = Date.now();
+      if (now - lastExecution > 50) { // Only run every 50ms
+        handleBackgroundEffect(e);
+        lastExecution = now;
+      }
+    }, { passive: true });
   }
   
   // Fix any potential issues with holographic cards
   const holographicCards = document.querySelectorAll('.holographic-card');
   holographicCards.forEach(card => {
-    // Ensure card effects don't interfere with scrolling
-    const existingMouseMove = card.onmousemove;
-    if (existingMouseMove) {
-      card.onmousemove = null;
-      card.addEventListener('mousemove', existingMouseMove, { passive: true });
+    // Remove any existing mousemove event listeners
+    const oldMouseMove = card.onmousemove;
+    card.onmousemove = null;
+    
+    // Add a throttled version of the mousemove event
+    if (oldMouseMove) {
+      card.addEventListener('mousemove', function(e) {
+        if (!card.throttleTimer) {
+          card.throttleTimer = setTimeout(function() {
+            oldMouseMove.call(card, e);
+            card.throttleTimer = null;
+          }, 30);
+        }
+      }, { passive: true });
     }
   });
   
@@ -1050,13 +1049,60 @@ function fixScrollingIssues() {
   const particlesContainer = document.getElementById('particles-js');
   if (particlesContainer) {
     particlesContainer.style.pointerEvents = 'none';
+    particlesContainer.style.position = 'fixed';
+    particlesContainer.style.zIndex = '-1';
   }
   
   // Fix any potential issues with fixed position elements
-  const fixedElements = document.querySelectorAll('.fixed-position');
+  const fixedElements = document.querySelectorAll('.fixed-position, .navbar, .footer-ultra');
   fixedElements.forEach(el => {
     el.style.willChange = 'transform';
   });
+  
+  // Fix any issues with transform-style: preserve-3d
+  const preserve3dElements = document.querySelectorAll('.float-3d, .table-ultra tbody tr, .chart-ultra');
+  preserve3dElements.forEach(el => {
+    el.style.transformStyle = 'flat';
+  });
+  
+  // Fix any issues with backdrop-filter
+  const backdropElements = document.querySelectorAll('.holographic-card, .stat-ultra, .chart-ultra');
+  backdropElements.forEach(el => {
+    // Check if backdrop-filter is causing issues
+    const computedStyle = window.getComputedStyle(el);
+    if (computedStyle.backdropFilter && navigator.userAgent.indexOf('Firefox') > -1) {
+      el.style.backdropFilter = 'none';
+    }
+  });
+  
+  // Add smooth scrolling for anchor links
+  document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function(e) {
+      e.preventDefault();
+      
+      const targetId = this.getAttribute('href');
+      if (targetId === '#') return;
+      
+      const targetElement = document.querySelector(targetId);
+      if (targetElement) {
+        targetElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        });
+      }
+    }, { passive: false });
+  });
+  
+  // Fix scrolling on mobile devices
+  if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+    document.body.style.webkitOverflowScrolling = 'touch';
+    
+    // Reduce animation intensity on mobile
+    const animatedElements = document.querySelectorAll('.animated-border, .float-3d, .glitch-text');
+    animatedElements.forEach(el => {
+      el.style.animationDuration = '50%';
+    });
+  }
 }
 
 // Handle background effect with passive event listener
